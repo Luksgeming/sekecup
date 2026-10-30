@@ -93,7 +93,8 @@ function room(v: unknown): Room {
   const points = list(o.points, 'Titik ruangan').map((pt) => vec(pt, 'Titik ruangan'));
   if (points.length < 3) fail('Ruangan butuh minimal 3 titik');
   const floor = o.floor === undefined ? ROOM_DEFAULTS.floor : isFloorMaterial(o.floor) ? o.floor : fail('Material lantai tidak dikenal');
-  return { id: str(o.id, 'ID ruangan'), name: str(o.name, 'Nama ruangan'), points, floor };
+  const ceilingColor = o.ceilingColor === undefined ? ROOM_DEFAULTS.ceilingColor : color(o.ceilingColor, 'Warna plafon');
+  return { id: str(o.id, 'ID ruangan'), name: str(o.name, 'Nama ruangan'), points, floor, ceilingColor };
 }
 
 export function parseProject(text: string): Project | Failure {

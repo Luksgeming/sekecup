@@ -5,7 +5,7 @@ import { snapPoint } from '../geometry/snap';
 import { add, dist, normalize, scale, sub } from '../geometry/vec';
 import { addRoom, cornerAt, moveCorner, moveFurniture } from '../model/project';
 import { drawOrder, footprint, furnitureAt } from '../geometry/footprint';
-import { FLOOR_MATERIALS, FURNITURE, type FurnitureKind } from '../interior/kinds';
+import { FLOOR_MATERIALS, FURNITURE, hangsFromCeiling, type FurnitureKind } from '../interior/kinds';
 import { askText } from '../ui/dialog';
 import { parseLength } from '../geometry/length';
 import { labelSide, WheelGesture } from './navigation';
@@ -461,14 +461,18 @@ export class PlanView {
   private drawFurniture(f: Furniture, selected: boolean, ghost = false): void {
     const { ctx } = this;
     const corners = footprint(f);
+    // ceiling pieces follow the drafting convention for things overhead: dashed and see-through
+    const overhead = hangsFromCeiling(f.kind);
     this.polygonPath(corners);
     ctx.fillStyle = COLORS.furniture;
-    ctx.globalAlpha = ghost ? 0.4 : 0.9;
+    ctx.globalAlpha = ghost ? 0.4 : overhead ? 0.35 : 0.9;
     ctx.fill();
     ctx.globalAlpha = 1;
     ctx.strokeStyle = ghost ? COLORS.draft : selected ? COLORS.selected : 'rgba(43, 42, 39, 0.75)';
     ctx.lineWidth = selected ? 2.5 : 1;
+    if (overhead) ctx.setLineDash([5, 4]);
     ctx.stroke();
+    ctx.setLineDash([]);
 
     // a short line on the back edge shows which way the piece faces
     const back = [this.toScreen(corners[0]), this.toScreen(corners[1])];

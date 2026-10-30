@@ -147,3 +147,17 @@ describe('furniture removed from the catalog', () => {
     expect(parseProjectWithNotes(JSON.stringify(broken))).toHaveProperty('error');
   });
 });
+
+describe('ceiling color in files', () => {
+  it('gives older rooms a default ceiling color', () => {
+    const p = sample();
+    const old = { ...p, rooms: p.rooms.map(({ ceilingColor: _c, ...r }) => r) };
+    expect((parseProject(JSON.stringify(old)) as Project).rooms[0].ceilingColor).toBe('#f7f6f2');
+  });
+
+  it('rejects a bad ceiling color', () => {
+    const p = sample();
+    const broken = { ...p, rooms: [{ ...p.rooms[0], ceilingColor: 'white' }] };
+    expect(parseProject(JSON.stringify(broken))).toHaveProperty('error');
+  });
+});

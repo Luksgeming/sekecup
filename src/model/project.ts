@@ -245,3 +245,16 @@ export function applyRecommendation(p: Project, rec: { palette: string[]; floor?
   const changed = walls.some((w, i) => w !== p.walls[i]) || rooms.some((r, i) => r !== p.rooms[i]);
   return changed ? { ...p, walls, rooms } : p;
 }
+
+export function setRoomCeiling(p: Project, id: string, color: string): Project | Failure {
+  const room = p.rooms.find((r) => r.id === id);
+  if (!room) return { error: 'Ruangan tidak ditemukan' };
+  if (!isHexColor(color)) return { error: 'Warna tidak valid' };
+  if (room.ceilingColor === color) return p;
+  return { ...p, rooms: p.rooms.map((r) => (r.id === id ? { ...r, ceilingColor: color } : r)) };
+}
+
+/** Ceiling height of the house: its tallest wall, or the default wall height when there are none. */
+export function ceilingHeight(p: Project): number {
+  return p.walls.length ? Math.max(...p.walls.map((w) => w.height)) : WALL_DEFAULTS.height;
+}

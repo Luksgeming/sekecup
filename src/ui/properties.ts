@@ -2,7 +2,7 @@ import { parseLength } from '../geometry/length';
 import { polygonArea } from '../geometry/polygon';
 import { dist } from '../geometry/vec';
 import { FLOOR_MATERIALS, FURNITURE, WALL_PALETTE, type FloorMaterial } from '../interior/kinds';
-import { removeFurniture, renameRoom, setRoomFloor, setWallColor, updateFurniture, updateOpening, updateWall } from '../model/project';
+import { removeFurniture, renameRoom, setRoomCeiling, setRoomFloor, setWallColor, updateFurniture, updateOpening, updateWall } from '../model/project';
 import type { Store } from '../model/store';
 import type { Failure, Project } from '../model/types';
 import type { Selection } from '../plan/tools';
@@ -15,6 +15,14 @@ type Field = {
 };
 
 const m = (v: number) => `${v.toFixed(2)}`;
+
+const CEILING_PALETTE = [
+  { label: 'Putih', color: '#f7f6f2' },
+  { label: 'Krem', color: '#efe2c8' },
+  { label: 'Abu muda', color: '#d9d9d6' },
+  { label: 'Kayu muda', color: '#d9c9a8' },
+  { label: 'Arang', color: '#3f3f3d' },
+];
 
 type View = {
   title: string;
@@ -138,7 +146,10 @@ export function createPropertiesPanel(
       title: 'Ruangan',
       fields: [{ label: 'Nama', value: r.name, commit: (text) => renameRoom(p, r.id, text) }],
       note: `Luas ${polygonArea(r.points).toFixed(2)} m²`,
-      extras: [floor],
+      extras: [
+        floor,
+        swatches('Warna plafon', CEILING_PALETTE, r.ceilingColor, (color) => apply((cur) => setRoomCeiling(cur, r.id, color))),
+      ],
     };
   }
 

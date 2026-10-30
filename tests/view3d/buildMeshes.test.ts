@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { buildMeshes } from '../../src/view3d/buildMeshes';
-import { addFurniture, addOpening, addRoom, addWall, emptyProject, setWallColor, updateFurniture } from '../../src/model/project';
+import { addFurniture, addOpening, addRoom, addWall, emptyProject, setRoomCeiling, setWallColor, updateFurniture } from '../../src/model/project';
 import { WINDOW_DEFAULTS, type Project } from '../../src/model/types';
 
 const oneWall = () => addWall(emptyProject(), { x: 0, y: 0 }, { x: 4, y: 0 });
@@ -109,5 +109,37 @@ describe('low walls', () => {
     const p = addFurniture(oneWall(), 'lemari', { x: 2, y: 1 });
     const item = ofKind(buildMeshes(p, { wallCut: 1.2 }), 'furniture')[0];
     expect(new THREE.Box3().setFromObject(item).getSize(new THREE.Vector3()).y).toBeCloseTo(2.23, 1);
+  });
+});
+
+describe('ceiling', () => {
+  const room = () => addRoom(oneWall(), 'Kamar', [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }]) as Project;
+
+  it('adds a ceiling per room at wall height, facing down', () => {
+    const g = buildMeshes(room());
+    const ceiling = ofKind(g, 'ceiling');
+    expect(ceiling).toHaveLength(1);
+    expect(ceiling[0].position.y).toBeCloseTo(2.8);
+    const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(ceiling[0].quaternion);
+    expect(normal.y).toBeCloseTo(-1);
+  });
+
+  it('leaves the ceiling out when walls are cut low', () => {
+    expect(ofKind(buildMeshes(room(), { wallCut: 1.2 }), 'ceiling')).toHaveLength(0);
+  });
+
+  it('hangs a ceiling lamp from the ceiling, and hides it when walls are cut low', () => {
+    const p = addFurniture(room(), 'lampu-gantung', { x: 2, y: 1 });
+    const lamp = ofKind(buildMeshes(p), 'furniture')[0];
+    const box = new THREE.Box3().setFromObject(lamp);
+    expect(box.max.y).toBeCloseTo(2.8, 2);
+    expect(ofKind(buildMeshes(p, { wallCut: 1.2 }), 'furniture')).toHaveLength(0);
+  });
+
+  it('uses the room ceiling color', () => {
+    const p = room();
+    const q = setRoomCeiling(p, p.rooms[0].id, '#d9c9a8') as Project;
+    const ceiling = ofKind(buildMeshes(q), 'ceiling')[0] as THREE.Mesh;
+    expect((ceiling.material as THREE.MeshStandardMaterial).color.getHexString()).toBe('d9c9a8');
   });
 });

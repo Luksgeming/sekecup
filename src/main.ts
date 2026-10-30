@@ -32,6 +32,12 @@ const view3d = new View3D(document.querySelector<HTMLElement>('#view3d-pane')!, 
   clickFloor: (at, shift) => plan.clickAt(at, shift),
   selectFurniture: (id) => plan.select({ kind: 'furniture', id }),
   isPlacing: () => plan.toolState.placing !== undefined,
+  currentRoom: () => {
+    const sel = plan.toolState.selected;
+    const p = store.project;
+    return (sel?.kind === 'room' ? p.rooms.find((r) => r.id === sel.id) : undefined) ?? p.rooms[0];
+  },
+  message: (msg) => toast(msg),
 });
 
 type ViewMode = '2d' | 'both' | '3d';

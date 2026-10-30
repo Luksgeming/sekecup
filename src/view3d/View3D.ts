@@ -2,16 +2,21 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { moveFurniture } from '../model/project';
 import type { Store } from '../model/store';
-import type { Vec2 } from '../model/types';
+import type { Room, Vec2 } from '../model/types';
 import { buildMeshes, disposeGroup } from './buildMeshes';
 import { floorPoint } from './floorPoint';
 import { isModelReady, loadModels, onModelLoaded } from '../interior/models';
 
 const LOW_WALL_HEIGHT = 1.2;
+const EYE_HEIGHT = 1.6;
+const OUTSIDE_HINT = 'Seret: putar · Shift atau klik kanan + seret: geser · Scroll: zoom · Seret furnitur untuk memindah';
 const DRAG_THRESHOLD_PX = 4;
 const FURNITURE_GRID = 0.05;
 
 export type View3DHooks = {
+  /** The room to stand in for the inside view: the selected one, or the first. */
+  currentRoom: () => Room | undefined;
+  message: (msg: string) => void;
   /** A plain click on the floor: the active plan tool handles it (select, place furniture…). */
   clickFloor: (at: Vec2, shift: boolean) => void;
   /** A click on a piece of furniture. */
@@ -41,6 +46,8 @@ export class View3D {
   private container: HTMLElement;
   private store: Store;
   private wallToggle: HTMLButtonElement;
+  private insideToggle: HTMLButtonElement;
+  private inside = false;
   readonly scene = new THREE.Scene();
 
   private hooks: View3DHooks;
@@ -103,11 +110,18 @@ export class View3D {
     bar.className = 'view3d-bar';
     this.wallToggle = document.createElement('button');
     this.wallToggle.type = 'button';
-    this.wallToggle.addEventListener('click', () => this.setLowWalls(!this.lowWalls));
-    bar.append(this.wallToggle);
+    this.wallToggle.addEventListener('click', () => {
+      if (this.inside) this.lookOutside();
+      else this.setLowWalls(!this.lowWalls);
+    });
+    this.insideToggle = document.createElement('button');
+    this.insideToggle.type = 'button';
+    this.insideToggle.textContent = 'Lihat dari dalam';
+    this.insideToggle.addEventListener('click', () => (this.inside ? this.lookOutside() : this.lookInside()));
+    bar.append(this.wallToggle, this.insideToggle);
     const hint = (this.hint = document.createElement('p'));
     hint.className = 'view3d-hint';
-    hint.textContent = 'Seret: putar · Shift atau klik kanan + seret: geser · Scroll: zoom · Seret furnitur untuk memindah';
+    hint.textContent = OUTSIDE_HINT;
     container.append(bar, hint);
     this.setLowWalls(true);
 
@@ -133,6 +147,43 @@ export class View3D {
     this.wallToggle.title = low ? 'Tampilkan dinding setinggi aslinya' : 'Potong dinding agar isi rumah terlihat';
     this.wallToggle.setAttribute('aria-pressed', String(low));
     this.rebuild();
+  }
+
+  /** Stands at eye height in the middle of a room, with full walls and the ceiling shown. */
+  lookInside(): void {
+    const room = this.hooks.currentRoom();
+    if (!room) {
+      this.hooks.message('Buat ruangan dulu (alat Ruangan) untuk melihat dari dalam.');
+      return;
+    }
+    const c = room.points.reduce((s, p) => ({ x: s.x + p.x / room.points.length, y: s.y + p.y / room.points.length }), { x: 0, y: 0 });
+    const maxY = Math.max(...room.points.map((p) => p.y));
+    this.inside = true;
+    this.autoFit = false;
+    this.setLowWalls(false);
+    // stand near one side at eye height and look across the room, so walls, ceiling and lamps all show
+    this.camera.fov = 70;
+    this.camera.updateProjectionMatrix();
+    this.camera.position.set(c.x, EYE_HEIGHT, c.y + (maxY - c.y) * 0.8);
+    this.controls.target.set(c.x, 1.2, c.y);
+    this.controls.minDistance = 0.3;
+    this.controls.maxPolarAngle = Math.PI - 0.05;
+    this.insideToggle.textContent = 'Lihat dari luar';
+    this.hint.textContent = 'Seret: berputar di dalam ruangan · Scroll: maju/mundur · Klik lantai untuk menaruh furnitur';
+    this.controls.update();
+    this.requestRender();
+  }
+
+  lookOutside(): void {
+    this.inside = false;
+    this.camera.fov = 45;
+    this.camera.updateProjectionMatrix();
+    this.controls.minDistance = 0;
+    this.controls.maxPolarAngle = Math.PI / 2 - 0.02;
+    this.insideToggle.textContent = 'Lihat dari dalam';
+    this.hint.textContent = OUTSIDE_HINT;
+    this.setLowWalls(true);
+    this.fit();
   }
 
   /** Highlights the selected furniture, or nothing. */
