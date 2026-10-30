@@ -10,3 +10,14 @@ export function polygonArea(points: Vec2[]): number {
   }
   return Math.abs(sum) / 2;
 }
+
+// ray casting
+export function pointInPolygon(p: Vec2, points: Vec2[]): boolean {
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const a = points[i];
+    const b = points[j];
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}

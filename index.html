@@ -7,7 +7,18 @@
     <title>REA</title>
   </head>
   <body>
-    <div id="app"></div>
+    <header id="toolbar"></header>
+    <main id="views">
+      <section class="pane" id="plan-pane">
+        <canvas id="plan"></canvas>
+      </section>
+      <section class="pane" id="view3d-pane"></section>
+    </main>
+    <footer>
+      <span id="hint"></span>
+      <span id="status"></span>
+    </footer>
+    <div id="toast" role="status" hidden></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
