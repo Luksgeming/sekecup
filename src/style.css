@@ -97,3 +97,29 @@ footer {
   #views { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
   #plan-pane { border-right: 0; border-bottom: 1px solid var(--line); }
 }
+
+.dialog {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 18px;
+  width: min(360px, calc(100vw - 32px));
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+}
+.dialog::backdrop { background: rgba(43, 42, 39, 0.35); }
+.dialog p { margin: 0 0 4px; font-size: 14px; line-height: 1.45; }
+.dialog label { display: grid; gap: 8px; font-size: 13px; color: var(--muted); }
+.dialog input {
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  background: #fff;
+}
+.dialog input:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 16px; }
+button.primary { background: var(--accent); color: var(--accent-ink); }
+button.primary:hover:not(:disabled) { background: #a5370a; }

@@ -48,3 +48,29 @@ describe('project file', () => {
     expect(parseProject(JSON.stringify(broken))).toHaveProperty('error');
   });
 });
+
+describe('review fixes: strict import', () => {
+  it('rejects overlapping openings', () => {
+    const p = sample();
+    const broken = { ...p, openings: [p.openings[0], { ...p.openings[0], id: 'o2', offset: 2.3 }] };
+    expect(parseProject(JSON.stringify(broken))).toHaveProperty('error');
+  });
+
+  it('rejects an opening that sticks out of its wall', () => {
+    const p = sample();
+    const broken = { ...p, openings: [{ ...p.openings[0], offset: 3.9 }] };
+    expect(parseProject(JSON.stringify(broken))).toHaveProperty('error');
+  });
+
+  it('rejects zero wall thickness', () => {
+    const p = sample();
+    const broken = { ...p, walls: [{ ...p.walls[0], thickness: 0 }] };
+    expect(parseProject(JSON.stringify(broken))).toHaveProperty('error');
+  });
+
+  it('rejects duplicate wall ids', () => {
+    const p = sample();
+    const broken = { ...p, walls: [p.walls[0], { ...p.walls[0], a: { x: 0, y: 5 }, b: { x: 4, y: 5 } }] };
+    expect(parseProject(JSON.stringify(broken))).toHaveProperty('error');
+  });
+});

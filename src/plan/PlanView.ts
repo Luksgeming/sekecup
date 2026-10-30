@@ -3,7 +3,9 @@ import type { Opening, Project, Vec2, Wall } from '../model/types';
 import { polygonArea } from '../geometry/polygon';
 import { snapPoint } from '../geometry/snap';
 import { add, dist, normalize, scale, sub } from '../geometry/vec';
-import { handleClick, handleKey, initialToolState, nearestWall, type ToolName, type ToolResult, type ToolState } from './tools';
+import { addRoom } from '../model/project';
+import { askText } from '../ui/dialog';
+import { handleClick, handleKey, initialToolState, nearestWall, reconcile, type ToolName, type ToolResult, type ToolState } from './tools';
 
 const COLORS = {
   bg: '#f7f5f0',
@@ -39,7 +41,11 @@ export class PlanView {
     this.canvas = canvas;
     this.store = store;
     this.ctx = canvas.getContext('2d')!;
-    store.subscribe(() => this.draw());
+    store.subscribe((p) => {
+      const next = reconcile(this.state, p);
+      if (next !== this.state) this.setState(next);
+      else this.draw();
+    });
     new ResizeObserver(() => this.resize()).observe(canvas);
     this.bindInput();
     this.resize();
@@ -56,8 +62,13 @@ export class PlanView {
   /** Runs a key through the active tool; returns true when it was handled. */
   key(key: string): boolean {
     if (!['Escape', 'Enter', 'Delete', 'Backspace'].includes(key)) return false;
-    this.applyResult(handleKey(this.state, this.store.project, key, { promptName: askRoomName }));
+    this.applyResult(handleKey(this.state, this.store.project, key));
     return true;
+  }
+
+  /** Forgets the half-drawn line, e.g. after undo removed the wall it continued from. */
+  clearDraft(): void {
+    if (this.state.draft.length) this.setState({ ...this.state, draft: [] });
   }
 
   private setState(s: ToolState): void {
@@ -70,6 +81,15 @@ export class PlanView {
     this.store.apply(r.project);
     if (r.message) this.onMessage(r.message);
     this.setState(r.state);
+    if (r.pendingRoom) void this.nameRoom(r.pendingRoom.points, r.pendingRoom.suggested);
+  }
+
+  private async nameRoom(points: Vec2[], suggested: string): Promise<void> {
+    const name = await askText('Nama ruangan:', suggested);
+    if (name === null) return;
+    const r = addRoom(this.store.project, name.trim() || suggested, points);
+    if ('error' in r) this.onMessage(r.error);
+    else this.store.apply(r);
   }
 
   private resize(): void {
@@ -110,7 +130,7 @@ export class PlanView {
       }
       if (e.button !== 0) return;
       const world = this.toWorld(this.eventPoint(e));
-      this.applyResult(handleClick(this.state, this.store.project, world, { shift: e.shiftKey }, { promptName: askRoomName }));
+      this.applyResult(handleClick(this.state, this.store.project, world, { shift: e.shiftKey }));
     });
 
     c.addEventListener('pointermove', (e) => {
@@ -143,7 +163,7 @@ export class PlanView {
     );
 
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'Space' && e.target === document.body) {
+      if (e.code === 'Space' && !isTextField(e.target)) {
         this.spaceDown = true;
         e.preventDefault();
       }
@@ -344,8 +364,8 @@ export class PlanView {
   }
 }
 
-function askRoomName(suggested: string): string | null {
-  return window.prompt('Nama ruangan:', suggested);
+export function isTextField(t: EventTarget | null): boolean {
+  return t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || (t instanceof HTMLElement && t.closest('dialog') !== null);
 }
 
 export function formatLength(m: number): string {

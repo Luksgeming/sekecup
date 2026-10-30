@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { handleClick, handleKey, initialToolState, type ToolState } from '../../src/plan/tools';
+import { handleClick, handleKey, initialToolState, reconcile, type ToolState } from '../../src/plan/tools';
 import { addWall, addRoom, emptyProject } from '../../src/model/project';
 import type { Project } from '../../src/model/types';
 
@@ -105,5 +105,27 @@ describe('select tool', () => {
     const p = box();
     const r = handleClick({ ...initialToolState(), tool: 'select', selected: { kind: 'wall', id: p.walls[0].id } }, p, { x: 9, y: 9 }, noMods);
     expect(r.state.selected).toBeUndefined();
+  });
+});
+
+describe('review fixes: tools', () => {
+  it('without promptName, finishing a room asks for a name instead of adding it', () => {
+    let r: { state: ToolState; project: Project } = { state: { ...initialToolState(), tool: 'room' }, project: emptyProject() };
+    for (const pt of [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }]) r = handleClick(r.state, r.project, pt, noMods);
+    const done = handleKey(r.state, r.project, 'Enter');
+    expect(done.project.rooms).toHaveLength(0);
+    expect(done.pendingRoom).toEqual({ points: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }], suggested: 'Ruang 1' });
+    expect(done.state.draft).toEqual([]);
+  });
+
+  it('reconcile clears a selection whose object no longer exists', () => {
+    const s: ToolState = { ...initialToolState(), tool: 'select', selected: { kind: 'wall', id: 'gone' } };
+    expect(reconcile(s, emptyProject()).selected).toBeUndefined();
+  });
+
+  it('reconcile keeps a selection that still exists', () => {
+    const p = box();
+    const s: ToolState = { ...initialToolState(), tool: 'select', selected: { kind: 'wall', id: p.walls[0].id } };
+    expect(reconcile(s, p)).toBe(s);
   });
 });

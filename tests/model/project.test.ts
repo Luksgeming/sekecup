@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { emptyProject, addWall, removeWall, addOpening, addRoom, removeOpening, removeRoom } from '../../src/model/project';
+import { emptyProject, addWall, removeWall, addOpening, addRoom, removeOpening, removeRoom, isEmptyProject } from '../../src/model/project';
 import type { Project } from '../../src/model/types';
 
 function withWall(): Project {
@@ -70,5 +70,24 @@ describe('addRoom', () => {
     const p = addRoom(emptyProject(), 'Kamar', [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }]) as Project;
     expect(p.rooms[0].name).toBe('Kamar');
     expect(removeRoom(p, p.rooms[0].id).rooms).toHaveLength(0);
+  });
+});
+
+describe('review fixes: model', () => {
+  it('removeWall with an unknown id returns the same project (no empty undo step)', () => {
+    const p = withWall();
+    expect(removeWall(p, 'missing')).toBe(p);
+  });
+
+  it('removeOpening and removeRoom with unknown ids return the same project', () => {
+    const p = withWall();
+    expect(removeOpening(p, 'missing')).toBe(p);
+    expect(removeRoom(p, 'missing')).toBe(p);
+  });
+
+  it('isEmptyProject is false when only rooms exist', () => {
+    const p = addRoom(emptyProject(), 'Kamar', [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }]) as Project;
+    expect(isEmptyProject(p)).toBe(false);
+    expect(isEmptyProject(emptyProject())).toBe(true);
   });
 });

@@ -1,3 +1,4 @@
+import { validateOpening } from '../model/project';
 import type { Failure, Opening, Project, Room, Vec2, Wall } from '../model/types';
 
 export const PROJECT_EXTENSION = '.rea.json';
@@ -16,6 +17,11 @@ const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object
 
 function num(v: unknown, what: string): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : fail(`${what} tidak valid`);
+}
+
+function positive(v: unknown, what: string): number {
+  const n = num(v, what);
+  return n > 0 ? n : fail(`${what} harus lebih dari 0`);
 }
 
 function str(v: unknown, what: string): string {
@@ -39,8 +45,8 @@ function wall(v: unknown): Wall {
     id: str(o.id, 'ID dinding'),
     a: vec(o.a, 'Titik dinding'),
     b: vec(o.b, 'Titik dinding'),
-    thickness: num(o.thickness, 'Tebal dinding'),
-    height: num(o.height, 'Tinggi dinding'),
+    thickness: positive(o.thickness, 'Tebal dinding'),
+    height: positive(o.height, 'Tinggi dinding'),
   };
 }
 
@@ -82,13 +88,19 @@ export function parseProject(text: string): Project | Failure {
   try {
     const walls = list(data.walls, 'Daftar dinding').map(wall);
     const wallIds = new Set(walls.map((w) => w.id));
-    return {
-      version: 1,
-      name: str(data.name, 'Nama project'),
-      walls,
-      openings: list(data.openings, 'Daftar bukaan').map((o) => opening(o, wallIds)),
-      rooms: list(data.rooms, 'Daftar ruangan').map(room),
-    };
+    const openings = list(data.openings, 'Daftar bukaan').map((o) => opening(o, wallIds));
+    const rooms = list(data.rooms, 'Daftar ruangan').map(room);
+
+    const ids = [...walls, ...openings, ...rooms].map((x) => x.id);
+    if (new Set(ids).size !== ids.length) fail('Ada ID ganda di file');
+
+    // same rules as placing them with the tools
+    openings.forEach((o, i) => {
+      const error = validateOpening(walls.find((w) => w.id === o.wallId)!, o, openings.slice(0, i));
+      if (error) fail(error);
+    });
+
+    return { version: 1, name: str(data.name, 'Nama project'), walls, openings, rooms };
   } catch (e) {
     if (e instanceof Invalid) return { error: e.message };
     throw e;

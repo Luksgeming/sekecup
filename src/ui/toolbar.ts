@@ -82,6 +82,11 @@ function button(label: string, title: string, onClick: () => void): HTMLButtonEl
   b.type = 'button';
   b.textContent = label;
   b.title = title;
-  b.addEventListener('click', onClick);
+  // never take focus, so Space/Enter keep going to the drawing instead of re-clicking the button
+  b.addEventListener('mousedown', (e) => e.preventDefault());
+  b.addEventListener('click', () => {
+    onClick();
+    b.blur();
+  });
   return b;
 }

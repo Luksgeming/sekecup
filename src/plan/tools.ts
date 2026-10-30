@@ -11,7 +11,13 @@ export type Selection = { kind: 'wall' | 'opening' | 'room'; id: string };
 
 export type ToolState = { tool: ToolName; draft: Vec2[]; hoverWallId?: string; selected?: Selection };
 
-export type ToolResult = { state: ToolState; project: Project; message?: string };
+export type ToolResult = {
+  state: ToolState;
+  project: Project;
+  message?: string;
+  /** A finished room outline still waiting for its name (when no promptName is given). */
+  pendingRoom?: { points: Vec2[]; suggested: string };
+};
 
 export type ToolContext = { promptName?: (suggested: string) => string | null };
 
@@ -88,11 +94,20 @@ export function handleKey(state: ToolState, project: Project, key: string, ctx: 
   return { state, project };
 }
 
+/** Drops a selection whose object was removed, e.g. by undo. */
+export function reconcile(state: ToolState, project: Project): ToolState {
+  const sel = state.selected;
+  if (!sel) return state;
+  const list = sel.kind === 'wall' ? project.walls : sel.kind === 'opening' ? project.openings : project.rooms;
+  return list.some((x) => x.id === sel.id) ? state : { ...state, selected: undefined };
+}
+
 function finishRoom(state: ToolState, project: Project, ctx: ToolContext): ToolResult {
   const cleared = { ...state, draft: [] };
   if (state.draft.length < 3) return { state: cleared, project, message: 'Ruangan butuh minimal 3 titik' };
   const suggested = `Ruang ${project.rooms.length + 1}`;
-  const name = ctx.promptName ? ctx.promptName(suggested) : suggested;
+  if (!ctx.promptName) return { state: cleared, project, pendingRoom: { points: state.draft, suggested } };
+  const name = ctx.promptName(suggested);
   if (name === null) return { state: cleared, project };
   const r = addRoom(project, name.trim() || suggested, state.draft);
   return 'error' in r ? { state: cleared, project, message: r.error } : { state: cleared, project: r };

@@ -1,13 +1,14 @@
 import './style.css';
-import { emptyProject } from './model/project';
+import { emptyProject, isEmptyProject } from './model/project';
 import { Store } from './model/store';
-import { PlanView } from './plan/PlanView';
+import { isTextField, PlanView } from './plan/PlanView';
+import { confirmDialog } from './ui/dialog';
 import { View3D } from './view3d/View3D';
 import { startAutosave } from './storage/autosave';
 import { parseProject, PROJECT_EXTENSION, serializeProject } from './io/projectFile';
 import { projectToDxf } from './io/dxf';
 import { exportGlb } from './io/glb';
-import { downloadBlob, pickFile, safeFilename } from './io/download';
+import { pickFile, safeFilename, saveFile } from './io/download';
 import { createToolbar, TOOL_HINTS, toolForKey } from './ui/toolbar';
 
 const store = new Store(emptyProject());
@@ -27,7 +28,12 @@ function setViewMode(mode: ViewMode): void {
   for (const m of ['2d', 'both', '3d'] as const) toolbar.setPressed(`view-${m}`, m === mode);
 }
 
+async function okToReplace(): Promise<boolean> {
+  return isEmptyProject(store.project) || confirmDialog('Gambar sekarang akan diganti dan tidak bisa di-undo. Lanjutkan?', 'Ganti');
+}
+
 async function openProjectFile(): Promise<void> {
+  if (!(await okToReplace())) return;
   const file = await pickFile('.json,application/json');
   if (!file) return;
   const p = parseProject(await file.text());
@@ -40,32 +46,53 @@ async function openProjectFile(): Promise<void> {
   toast(`Dibuka: ${p.name}`);
 }
 
+async function save(blob: Blob, filename: string): Promise<void> {
+  try {
+    if (await saveFile(blob, filename)) toast(`Tersimpan: ${filename}`);
+  } catch {
+    toast('Gagal menyimpan file');
+  }
+}
+
 function saveProjectFile(): void {
   const p = store.project;
-  downloadBlob(new Blob([serializeProject(p)], { type: 'application/json' }), safeFilename(p.name) + PROJECT_EXTENSION);
+  void save(new Blob([serializeProject(p)], { type: 'application/json' }), safeFilename(p.name) + PROJECT_EXTENSION);
 }
 
 function exportDxf(): void {
   const p = store.project;
-  downloadBlob(new Blob([projectToDxf(p)], { type: 'application/dxf' }), `${safeFilename(p.name)}.dxf`);
+  void save(new Blob([projectToDxf(p)], { type: 'application/dxf' }), `${safeFilename(p.name)}.dxf`);
 }
 
 async function exportModel(): Promise<void> {
+  let blob: Blob;
   try {
-    downloadBlob(await exportGlb(view3d.house3d), `${safeFilename(store.project.name)}.glb`);
+    blob = await exportGlb(view3d.house3d);
   } catch {
     toast('Gagal export model 3D');
+    return;
   }
+  await save(blob, `${safeFilename(store.project.name)}.glb`);
 }
 
-function newProject(): void {
-  if (store.project.walls.length && !window.confirm('Mulai gambar baru? Gambar sekarang akan diganti.')) return;
+async function newProject(): Promise<void> {
+  if (!(await okToReplace())) return;
   store.load(emptyProject());
+}
+
+function undo(): void {
+  plan.clearDraft();
+  store.undo();
+}
+
+function redo(): void {
+  plan.clearDraft();
+  store.redo();
 }
 
 const toolbar = createToolbar(toolbarEl, (t) => plan.setTool(t), [
   [
-    { id: 'new', label: 'Baru', title: 'Gambar baru', run: newProject },
+    { id: 'new', label: 'Baru', title: 'Gambar baru', run: () => void newProject() },
     { id: 'open', label: 'Buka', title: 'Buka file .rea.json', run: () => void openProjectFile() },
     { id: 'save', label: 'Simpan File', title: 'Unduh file .rea.json', run: saveProjectFile },
   ],
@@ -74,8 +101,8 @@ const toolbar = createToolbar(toolbarEl, (t) => plan.setTool(t), [
     { id: 'glb', label: 'Export 3D', title: 'Model .glb untuk SketchUp/Blender', run: () => void exportModel() },
   ],
   [
-    { id: 'undo', label: 'Undo', title: 'Undo (Ctrl/Cmd+Z)', run: () => store.undo() },
-    { id: 'redo', label: 'Redo', title: 'Redo (Ctrl/Cmd+Shift+Z)', run: () => store.redo() },
+    { id: 'undo', label: 'Undo', title: 'Undo (Ctrl/Cmd+Z)', run: () => undo() },
+    { id: 'redo', label: 'Redo', title: 'Redo (Ctrl/Cmd+Shift+Z)', run: () => redo() },
   ],
   [
     { id: 'view-2d', label: '2D', title: 'Hanya denah', run: () => setViewMode('2d') },
@@ -109,12 +136,12 @@ store.subscribe(syncHistory);
 syncHistory();
 
 window.addEventListener('keydown', (e) => {
-  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+  if (isTextField(e.target)) return;
   const mod = e.metaKey || e.ctrlKey;
   if (mod && e.key.toLowerCase() === 'z') {
     e.preventDefault();
-    if (e.shiftKey) store.redo();
-    else store.undo();
+    if (e.shiftKey) redo();
+    else undo();
     return;
   }
   if (mod) return;

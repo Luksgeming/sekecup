@@ -20,6 +20,8 @@
     "vitest": "^4.1.12"
   },
   "dependencies": {
+    "@tauri-apps/plugin-dialog": "^2.8.4",
+    "@tauri-apps/plugin-fs": "^2.7.1",
     "idb-keyval": "^6.3.0",
     "three": "^0.186.1"
   }
