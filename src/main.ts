@@ -7,6 +7,8 @@ import type { ToolName } from './plan/tools';
 import { confirmDialog } from './ui/dialog';
 import { createPropertiesPanel } from './ui/properties';
 import { createCatalogPanel } from './ui/catalogPanel';
+import { createAdvisor } from './ui/advisor';
+import { applyRecommendation } from './model/project';
 import { View3D } from './view3d/View3D';
 import { startAutosave } from './storage/autosave';
 import { parseProject, PROJECT_EXTENSION, serializeProject } from './io/projectFile';
@@ -112,7 +114,21 @@ function chooseTool(t: ToolName): void {
   plan.setTool(t);
 }
 
+const advisor = createAdvisor({
+  apply: (rec) => {
+    const sel = plan.toolState.selected;
+    const roomId = sel?.kind === 'room' ? sel.id : undefined;
+    const next = applyRecommendation(store.project, rec, roomId);
+    if (next === store.project) return store.project.walls.length ? 'Desain sudah sesuai saran ini' : 'Gambar dinding dan ruangan dulu, lalu terapkan saran';
+    store.apply(next);
+    return roomId ? 'Saran diterapkan ke ruangan terpilih. Undo untuk membatalkan.' : 'Saran diterapkan. Undo untuk membatalkan.';
+  },
+  place: (kind) => plan.placeFurniture(kind),
+  toast,
+});
+
 const toolbar = createToolbar(toolbarEl, chooseTool, [
+  [{ id: 'advisor', label: 'Saran AI', title: 'Saran interior dari foto ruangan', run: () => advisor.open() }],
   [
     { id: 'new', label: 'Baru', title: 'Gambar baru', run: () => void newProject() },
     { id: 'open', label: 'Buka', title: 'Buka file .rea.json', run: () => void openProjectFile() },

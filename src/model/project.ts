@@ -232,3 +232,12 @@ export function removeFurniture(p: Project, id: string): Project {
   if (!p.furniture.some((f) => f.id === id)) return p;
   return { ...p, furniture: p.furniture.filter((f) => f.id !== id) };
 }
+
+/** Applies a style suggestion: its first color to every wall and its floor to one room or all rooms. */
+export function applyRecommendation(p: Project, rec: { palette: string[]; floor: FloorMaterial }, roomId?: string): Project {
+  const color = rec.palette.find(isHexColor);
+  const walls = color ? p.walls.map((w) => (w.color === color ? w : { ...w, color })) : p.walls;
+  const rooms = p.rooms.map((r) => (r.floor === rec.floor || (roomId && r.id !== roomId) ? r : { ...r, floor: rec.floor }));
+  const changed = walls.some((w, i) => w !== p.walls[i]) || rooms.some((r, i) => r !== p.rooms[i]);
+  return changed ? { ...p, walls, rooms } : p;
+}
