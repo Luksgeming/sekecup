@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseProject, serializeProject } from '../../src/io/projectFile';
-import { addOpening, addRoom, addWall, emptyProject } from '../../src/model/project';
+import { addFurniture, addOpening, addRoom, addWall, emptyProject } from '../../src/model/project';
 import { DOOR_DEFAULTS, type Project } from '../../src/model/types';
 
 function sample(): Project {
@@ -20,7 +20,7 @@ describe('project file', () => {
   });
 
   it('rejects an unknown version', () => {
-    const text = JSON.stringify({ ...sample(), version: 2 });
+    const text = JSON.stringify({ ...sample(), version: 9 });
     expect(parseProject(text)).toEqual({ error: 'Versi file tidak didukung' });
   });
 
@@ -71,6 +71,47 @@ describe('review fixes: strict import', () => {
   it('rejects duplicate wall ids', () => {
     const p = sample();
     const broken = { ...p, walls: [p.walls[0], { ...p.walls[0], a: { x: 0, y: 5 }, b: { x: 4, y: 5 } }] };
+    expect(parseProject(JSON.stringify(broken))).toHaveProperty('error');
+  });
+});
+
+describe('version 2', () => {
+  it('opens a version 1 file with interior defaults', () => {
+    const p = sample();
+    const v1 = {
+      version: 1,
+      name: p.name,
+      walls: p.walls.map(({ color: _c, ...w }) => w),
+      openings: p.openings,
+      rooms: p.rooms.map(({ floor: _f, ...r }) => r),
+    };
+    const q = parseProject(JSON.stringify(v1)) as Project;
+    expect(q.version).toBe(2);
+    expect(q.walls[0].color).toBe('#f2efe8');
+    expect(q.rooms[0].floor).toBe('keramik');
+    expect(q.furniture).toEqual([]);
+  });
+
+  it('round-trips furniture', () => {
+    const p = addFurniture(sample(), 'sofa-3', { x: 1, y: 1 });
+    expect(parseProject(serializeProject(p))).toEqual(p);
+  });
+
+  it('rejects an unknown furniture kind', () => {
+    const p = addFurniture(sample(), 'sofa-3', { x: 1, y: 1 });
+    const broken = { ...p, furniture: [{ ...p.furniture[0], kind: 'jacuzzi' }] };
+    expect(parseProject(JSON.stringify(broken))).toHaveProperty('error');
+  });
+
+  it('rejects a bad wall color', () => {
+    const p = sample();
+    const broken = { ...p, walls: [{ ...p.walls[0], color: 'blue' }] };
+    expect(parseProject(JSON.stringify(broken))).toHaveProperty('error');
+  });
+
+  it('rejects an unknown floor material', () => {
+    const p = sample();
+    const broken = { ...p, rooms: [{ ...p.rooms[0], floor: 'lava' }] };
     expect(parseProject(JSON.stringify(broken))).toHaveProperty('error');
   });
 });

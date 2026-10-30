@@ -1,6 +1,7 @@
 import { dist } from '../geometry/vec';
 import { polygonArea } from '../geometry/polygon';
-import { WALL_DEFAULTS, type Failure, type Opening, type Project, type Vec2, type Wall } from './types';
+import { FURNITURE, isFloorMaterial, isHexColor } from '../interior/kinds';
+import { ROOM_DEFAULTS, WALL_DEFAULTS, type Failure, type FloorMaterial, type FurnitureKind, type Opening, type Project, type Vec2, type Wall } from './types';
 
 const MIN_WALL_LENGTH = 0.01;
 const EPS = 1e-9;
@@ -10,11 +11,11 @@ const CORNER_EPS = 0.001;
 const newId = () => crypto.randomUUID();
 
 export function emptyProject(name = 'Rumah Baru'): Project {
-  return { version: 1, name, walls: [], openings: [], rooms: [] };
+  return { version: 2, name, walls: [], openings: [], rooms: [], furniture: [] };
 }
 
 export function isEmptyProject(p: Project): boolean {
-  return p.walls.length === 0 && p.openings.length === 0 && p.rooms.length === 0;
+  return p.walls.length === 0 && p.openings.length === 0 && p.rooms.length === 0 && p.furniture.length === 0;
 }
 
 export function addWall(p: Project, a: Vec2, b: Vec2): Project {
@@ -66,7 +67,7 @@ export function addRoom(p: Project, name: string, points: Vec2[]): Project | Fai
   if (clean.length > 1 && dist(clean[0], clean.at(-1)!) <= CORNER_EPS) clean.pop();
   if (clean.length < 3) return { error: 'Ruangan butuh minimal 3 titik' };
   if (polygonArea(clean) < MIN_ROOM_AREA) return { error: 'Ruangan tidak punya luas' };
-  return { ...p, rooms: [...p.rooms, { id: newId(), name, points: clean }] };
+  return { ...p, rooms: [...p.rooms, { id: newId(), name, points: clean, ...ROOM_DEFAULTS }] };
 }
 
 export function removeRoom(p: Project, id: string): Project {
@@ -185,4 +186,49 @@ export function moveCorner(p: Project, from: Vec2, to: Vec2): Project | Failure 
     r.points.some((pt) => atCorner(pt, from)) ? { ...r, points: r.points.map((pt) => (atCorner(pt, from) ? to : pt)) } : r,
   );
   return { ...p, walls, openings, rooms };
+}
+
+export function setWallColor(p: Project, id: string, color: string): Project | Failure {
+  const wall = p.walls.find((w) => w.id === id);
+  if (!wall) return { error: 'Dinding tidak ditemukan' };
+  if (!isHexColor(color)) return { error: 'Warna tidak valid' };
+  if (wall.color === color) return p;
+  return { ...p, walls: p.walls.map((w) => (w.id === id ? { ...w, color } : w)) };
+}
+
+export function setRoomFloor(p: Project, id: string, floor: FloorMaterial): Project | Failure {
+  const room = p.rooms.find((r) => r.id === id);
+  if (!room) return { error: 'Ruangan tidak ditemukan' };
+  if (!isFloorMaterial(floor)) return { error: 'Material lantai tidak dikenal' };
+  if (room.floor === floor) return p;
+  return { ...p, rooms: p.rooms.map((r) => (r.id === id ? { ...r, floor } : r)) };
+}
+
+export function addFurniture(p: Project, kind: FurnitureKind, at: Vec2): Project {
+  const item = { id: newId(), kind, x: at.x, y: at.y, rotation: 0, color: FURNITURE[kind].color };
+  return { ...p, furniture: [...p.furniture, item] };
+}
+
+export function moveFurniture(p: Project, id: string, to: Vec2): Project {
+  const f = p.furniture.find((x) => x.id === id);
+  if (!f || (same(f.x, to.x) && same(f.y, to.y))) return p;
+  return { ...p, furniture: p.furniture.map((x) => (x.id === id ? { ...x, x: to.x, y: to.y } : x)) };
+}
+
+const normalizeDegrees = (deg: number) => ((Math.round(deg) % 360) + 360) % 360;
+
+export function updateFurniture(p: Project, id: string, patch: { rotation?: number; color?: string }): Project | Failure {
+  const f = p.furniture.find((x) => x.id === id);
+  if (!f) return { error: 'Furnitur tidak ditemukan' };
+  if (patch.color !== undefined && !isHexColor(patch.color)) return { error: 'Warna tidak valid' };
+  if (patch.rotation !== undefined && !Number.isFinite(patch.rotation)) return { error: 'Rotasi tidak valid' };
+  const rotation = patch.rotation === undefined ? f.rotation : normalizeDegrees(patch.rotation);
+  const color = patch.color ?? f.color;
+  if (rotation === f.rotation && color === f.color) return p;
+  return { ...p, furniture: p.furniture.map((x) => (x.id === id ? { ...x, rotation, color } : x)) };
+}
+
+export function removeFurniture(p: Project, id: string): Project {
+  if (!p.furniture.some((f) => f.id === id)) return p;
+  return { ...p, furniture: p.furniture.filter((f) => f.id !== id) };
 }

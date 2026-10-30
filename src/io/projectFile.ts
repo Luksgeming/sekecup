@@ -1,5 +1,6 @@
 import { validateOpening } from '../model/project';
-import type { Failure, Opening, Project, Room, Vec2, Wall } from '../model/types';
+import { isFloorMaterial, isFurnitureKind, isHexColor } from '../interior/kinds';
+import { ROOM_DEFAULTS, WALL_DEFAULTS, type Failure, type Furniture, type Opening, type Project, type Room, type Vec2, type Wall } from '../model/types';
 
 export const PROJECT_EXTENSION = '.rea.json';
 
@@ -47,6 +48,25 @@ function wall(v: unknown): Wall {
     b: vec(o.b, 'Titik dinding'),
     thickness: positive(o.thickness, 'Tebal dinding'),
     height: positive(o.height, 'Tinggi dinding'),
+    color: o.color === undefined ? WALL_DEFAULTS.color : color(o.color, 'Warna dinding'),
+  };
+}
+
+function color(v: unknown, what: string): string {
+  return isHexColor(v) ? v.toLowerCase() : fail(`${what} tidak valid`);
+}
+
+function furniture(v: unknown): Furniture {
+  if (!isObj(v)) fail('Furnitur tidak valid');
+  const o = v as Record<string, unknown>;
+  if (!isFurnitureKind(o.kind)) fail(`Jenis furnitur tidak dikenal: ${String(o.kind)}`);
+  return {
+    id: str(o.id, 'ID furnitur'),
+    kind: o.kind as Furniture['kind'],
+    x: num(o.x, 'Posisi furnitur'),
+    y: num(o.y, 'Posisi furnitur'),
+    rotation: num(o.rotation, 'Rotasi furnitur'),
+    color: color(o.color, 'Warna furnitur'),
   };
 }
 
@@ -72,7 +92,8 @@ function room(v: unknown): Room {
   const o = v as Record<string, unknown>;
   const points = list(o.points, 'Titik ruangan').map((pt) => vec(pt, 'Titik ruangan'));
   if (points.length < 3) fail('Ruangan butuh minimal 3 titik');
-  return { id: str(o.id, 'ID ruangan'), name: str(o.name, 'Nama ruangan'), points };
+  const floor = o.floor === undefined ? ROOM_DEFAULTS.floor : isFloorMaterial(o.floor) ? o.floor : fail('Material lantai tidak dikenal');
+  return { id: str(o.id, 'ID ruangan'), name: str(o.name, 'Nama ruangan'), points, floor };
 }
 
 export function parseProject(text: string): Project | Failure {
@@ -83,15 +104,17 @@ export function parseProject(text: string): Project | Failure {
     return { error: 'File bukan project REA (format tidak dikenal)' };
   }
   if (!isObj(data)) return { error: 'File bukan project REA' };
-  if (data.version !== 1) return { error: 'Versi file tidak didukung' };
+  // version 1 files predate interior design; missing colors, floors and furniture get defaults
+  if (data.version !== 1 && data.version !== 2) return { error: 'Versi file tidak didukung' };
 
   try {
     const walls = list(data.walls, 'Daftar dinding').map(wall);
     const wallIds = new Set(walls.map((w) => w.id));
     const openings = list(data.openings, 'Daftar bukaan').map((o) => opening(o, wallIds));
     const rooms = list(data.rooms, 'Daftar ruangan').map(room);
+    const items = data.version === 1 ? [] : list(data.furniture, 'Daftar furnitur').map(furniture);
 
-    const ids = [...walls, ...openings, ...rooms].map((x) => x.id);
+    const ids = [...walls, ...openings, ...rooms, ...items].map((x) => x.id);
     if (new Set(ids).size !== ids.length) fail('Ada ID ganda di file');
 
     // same rules as placing them with the tools
@@ -100,7 +123,7 @@ export function parseProject(text: string): Project | Failure {
       if (error) fail(error);
     });
 
-    return { version: 1, name: str(data.name, 'Nama project'), walls, openings, rooms };
+    return { version: 2, name: str(data.name, 'Nama project'), walls, openings, rooms, furniture: items };
   } catch (e) {
     if (e instanceof Invalid) return { error: e.message };
     throw e;

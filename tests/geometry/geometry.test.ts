@@ -4,7 +4,7 @@ import { polygonArea } from '../../src/geometry/polygon';
 import { wallBoxes, projectOnWall } from '../../src/geometry/wallBoxes';
 import type { Opening, Wall } from '../../src/model/types';
 
-const wall: Wall = { id: 'w', a: { x: 0, y: 0 }, b: { x: 4, y: 0 }, thickness: 0.15, height: 2.8 };
+const wall: Wall = { id: 'w', a: { x: 0, y: 0 }, b: { x: 4, y: 0 }, thickness: 0.15, height: 2.8, color: '#f2efe8' };
 
 const opening = (o: Partial<Opening>): Opening => ({
   id: 'o', wallId: 'w', type: 'window', offset: 2, width: 1.2, height: 1.2, sill: 0.9, ...o,
