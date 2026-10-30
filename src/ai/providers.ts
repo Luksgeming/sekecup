@@ -69,35 +69,63 @@ export function parseRecommendation(text: string): Recommendation | Failure {
   }
   if (start < 0 || typeof o !== 'object' || o === null) return { error: 'Jawaban AI tidak bisa dibaca. Coba analisis sekali lagi.' };
 
+  // values the app doesn't know are dropped, never replaced with a made-up default
   const palette = strings(o.palette).filter(isHexColor).map((c) => c.toLowerCase()).slice(0, 6);
+  const floor = isFloorMaterial(o.floor) ? o.floor : undefined;
+  const furniture = [...new Set(strings(o.furniture).filter(isFurnitureKind))];
+  const tips = strings(o.tips).map((t) => t.trim()).filter(Boolean).slice(0, 6);
+  if (!palette.length && !floor && !furniture.length && !tips.length) {
+    return { error: 'Jawaban AI tidak berisi saran yang bisa dipakai. Coba foto lain atau mode offline.' };
+  }
   return {
     style: typeof o.style === 'string' && o.style.trim() ? o.style.trim() : 'Saran AI',
     summary: typeof o.summary === 'string' ? o.summary.trim() : '',
-    palette: palette.length ? palette : ['#f2efe8'],
-    floor: isFloorMaterial(o.floor) ? o.floor : 'keramik',
-    furniture: [...new Set(strings(o.furniture).filter(isFurnitureKind))],
-    tips: strings(o.tips).map((t) => t.trim()).filter(Boolean).slice(0, 6),
+    palette,
+    floor,
+    furniture,
+    tips,
     source: 'ai',
   };
 }
 
-export function errorMessage(status: number): string {
-  if (status === 401 || status === 403) return 'API key ditolak. Periksa lagi key di Pengaturan AI.';
+export function errorMessage(status: number, body?: unknown): string {
+  const err = (body as { error?: { message?: unknown; code?: unknown; details?: { reason?: unknown }[] } } | undefined)?.error;
+  const badKey =
+    err?.details?.some((d) => d?.reason === 'API_KEY_INVALID') || (typeof err?.message === 'string' && /api key/i.test(err.message));
+  if (status === 401 || status === 403 || badKey) return 'API key ditolak. Periksa lagi key di Pengaturan AI.';
+  if (err?.code === 'insufficient_quota') return 'Kuota AI habis. Periksa tagihan atau paket di akun layanan AI-mu.';
   if (status === 429) return 'Kuota AI habis atau terlalu sering dipakai. Tunggu sebentar lalu coba lagi.';
+  if (status === 400 && typeof err?.message === 'string' && /location|region/i.test(err.message)) {
+    return 'Layanan AI ini tidak tersedia di wilayahmu. Coba penyedia lain di Pengaturan AI.';
+  }
   if (status === 404) return 'Model AI tidak ditemukan. Periksa nama model di Pengaturan AI.';
   return `Layanan AI menjawab dengan kesalahan (kode ${status}).`;
 }
 
+const TIMEOUT_MS = 60_000;
+
 /** Sends the photo to the chosen provider and returns its recommendation. */
-export async function analyzeWithAi(s: AiSettings, imageBase64: string, mime: string): Promise<Recommendation | Failure> {
+export async function analyzeWithAi(
+  s: AiSettings,
+  imageBase64: string,
+  mime: string,
+  fetchImpl: (url: string, init?: RequestInit) => Promise<Response> = fetch,
+  timeoutMs = TIMEOUT_MS,
+): Promise<Recommendation | Failure> {
   const req = buildRequest(s, imageBase64, mime);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   let res: Response;
   try {
-    res = await fetch(req.url, { method: 'POST', headers: req.headers, body: req.body });
+    res = await fetchImpl(req.url, { method: 'POST', headers: req.headers, body: req.body, signal: controller.signal });
   } catch {
-    return { error: 'Tidak bisa terhubung ke layanan AI. Periksa koneksi internet, atau pakai mode offline.' };
+    return controller.signal.aborted
+      ? { error: 'Layanan AI terlalu lama menjawab. Coba lagi, atau pakai mode offline.' }
+      : { error: 'Tidak bisa terhubung ke layanan AI. Periksa koneksi internet, atau pakai mode offline.' };
+  } finally {
+    clearTimeout(timer);
   }
-  if (!res.ok) return { error: errorMessage(res.status) };
+  if (!res.ok) return { error: errorMessage(res.status, await res.json().catch(() => undefined)) };
   const text = readResponse(s.provider, await res.json().catch(() => undefined));
   return text ? parseRecommendation(text) : { error: 'AI tidak memberi jawaban. Coba foto lain.' };
 }

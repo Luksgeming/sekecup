@@ -121,14 +121,16 @@ const advisor = createAdvisor({
     const next = applyRecommendation(store.project, rec, roomId);
     if (next === store.project) return store.project.walls.length ? 'Desain sudah sesuai saran ini' : 'Gambar dinding dan ruangan dulu, lalu terapkan saran';
     store.apply(next);
-    return roomId ? 'Saran diterapkan ke ruangan terpilih. Undo untuk membatalkan.' : 'Saran diterapkan. Undo untuk membatalkan.';
+    return roomId && rec.floor
+      ? 'Lantai ruangan terpilih dan warna semua dinding diubah. Undo untuk membatalkan.'
+      : 'Saran diterapkan. Undo untuk membatalkan.';
   },
   place: (kind) => plan.placeFurniture(kind),
   toast,
 });
 
 const toolbar = createToolbar(toolbarEl, chooseTool, [
-  [{ id: 'advisor', label: 'Saran AI', title: 'Saran interior dari foto ruangan', run: () => advisor.open() }],
+  [{ id: 'advisor', label: 'Saran Interior', title: 'Saran interior dari foto ruangan', run: () => advisor.open() }],
   [
     { id: 'new', label: 'Baru', title: 'Gambar baru', run: () => void newProject() },
     { id: 'open', label: 'Buka', title: 'Buka file .rea.json', run: () => void openProjectFile() },
@@ -178,6 +180,8 @@ store.subscribe(syncHistory);
 syncHistory();
 
 window.addEventListener('keydown', (e) => {
+  // an open dialog owns the keyboard; nothing may change the plan behind it
+  if (document.querySelector('dialog[open]')) return;
   if (isTextField(e.target)) return;
   const mod = e.metaKey || e.ctrlKey;
   if (mod && e.key.toLowerCase() === 'z') {
@@ -217,3 +221,7 @@ startAutosave(store, undefined, { onWriteError: showStorageBanner }).then(({ ok,
 });
 
 if (!PREVIEW && !('__TAURI_INTERNALS__' in window)) registerSW({ immediate: true });
+
+// a file dropped anywhere outside a drop zone must not navigate away from the app
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('drop', (e) => e.preventDefault());

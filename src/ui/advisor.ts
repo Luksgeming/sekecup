@@ -12,7 +12,7 @@ type Photo = { base64: string; mime: string; pixels: Uint8ClampedArray; url: str
 
 export type AdvisorHooks = {
   /** Applies the suggestion to the design; returns a message for the user. */
-  apply: (rec: Recommendation) => string;
+  apply: (rec: Pick<Recommendation, 'palette' | 'floor'>) => string;
   /** Arms the furniture tool with a suggested piece. */
   place: (kind: FurnitureKind) => void;
   toast: (msg: string) => void;
@@ -33,7 +33,12 @@ async function readPhoto(file: File): Promise<Photo> {
   const url = URL.createObjectURL(file);
   const img = new Image();
   img.src = url;
-  await img.decode();
+  try {
+    await img.decode();
+  } catch (e) {
+    URL.revokeObjectURL(url);
+    throw e;
+  }
   const draw = (max: number) => {
     const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
     const c = document.createElement('canvas');
@@ -53,6 +58,8 @@ export function createAdvisor(hooks: AdvisorHooks): { open: () => void } {
   let photo: Photo | undefined;
   let result: Recommendation | undefined;
   let busy = false;
+  // bumps whenever the photo changes, so a slow answer for an older photo is ignored
+  let generation = 0;
 
   const dialog = el('dialog', { className: 'dialog advisor' });
   dialog.setAttribute('aria-labelledby', 'advisor-title');
@@ -87,23 +94,34 @@ export function createAdvisor(hooks: AdvisorHooks): { open: () => void } {
       status.textContent = 'File itu bukan gambar. Pilih foto JPG atau PNG.';
       return;
     }
+    const mine = ++generation;
+    let next: Photo;
     try {
-      if (photo) URL.revokeObjectURL(photo.url);
-      photo = await readPhoto(file);
+      next = await readPhoto(file);
     } catch {
-      status.textContent = 'Foto tidak bisa dibuka. Coba foto lain.';
+      status.textContent = 'Foto tidak bisa dibuka. Pakai foto JPG atau PNG.';
       return;
     }
+    if (mine !== generation) {
+      URL.revokeObjectURL(next.url);
+      return;
+    }
+    if (photo) URL.revokeObjectURL(photo.url);
+    photo = next;
+    result = undefined;
+    results.replaceChildren();
     preview.src = photo.url;
     preview.hidden = false;
     dropText.textContent = 'Ganti foto';
+    busy = false;
     analyzeBtn.disabled = false;
     status.textContent = '';
   }
 
   input.addEventListener('change', () => void usePhoto(input.files?.[0]));
-  drop.addEventListener('dragover', (e) => e.preventDefault());
-  drop.addEventListener('drop', (e) => {
+  // the whole dialog accepts a dropped photo, so a near miss never opens the image outside the app
+  dialog.addEventListener('dragover', (e) => e.preventDefault());
+  dialog.addEventListener('drop', (e) => {
     e.preventDefault();
     void usePhoto(e.dataTransfer?.files[0]);
   });
@@ -115,10 +133,12 @@ export function createAdvisor(hooks: AdvisorHooks): { open: () => void } {
   async function analyze(forceOffline = false): Promise<void> {
     if (!photo || busy) return;
     const s = loadSettings();
+    const mine = generation;
     busy = true;
     analyzeBtn.disabled = true;
     status.textContent = s.apiKey && !forceOffline ? 'Menganalisis dengan AI…' : 'Menganalisis warna foto…';
     const r = s.apiKey && !forceOffline ? await analyzeWithAi(s, photo.base64, photo.mime) : recommendOffline(extractPalette(photo.pixels));
+    if (mine !== generation) return; // the photo changed while waiting
     busy = false;
     analyzeBtn.disabled = false;
     if ('error' in r) {
@@ -137,8 +157,10 @@ export function createAdvisor(hooks: AdvisorHooks): { open: () => void } {
   function render(r: Recommendation): void {
     const swatches = el('div', { className: 'swatch-list' });
     for (const c of r.palette) {
-      const s = el('span', { className: 'swatch', title: c });
+      const s = el('button', { type: 'button', className: 'swatch', title: `Pakai ${c} untuk semua dinding` });
+      s.setAttribute('aria-label', `Pakai warna ${c} untuk semua dinding`);
       s.style.background = c;
+      s.addEventListener('click', () => hooks.toast(hooks.apply({ palette: [c] })));
       swatches.append(s);
     }
     const furniture = el('div', { className: 'advisor-furniture' });
@@ -161,11 +183,10 @@ export function createAdvisor(hooks: AdvisorHooks): { open: () => void } {
       el('p', { className: 'advisor-source' }, r.source === 'ai' ? 'Saran AI' : 'Saran offline (dari warna foto)'),
       el('h3', {}, r.style),
       ...(r.summary ? [el('p', {}, r.summary)] : []),
-      el('h4', {}, 'Palet warna'),
-      swatches,
-      el('p', { className: 'advisor-note' }, 'Warna pertama untuk dinding.'),
-      el('h4', {}, 'Lantai'),
-      el('p', {}, FLOOR_MATERIALS[r.floor].label),
+      ...(r.palette.length
+        ? [el('h4', {}, 'Palet warna'), swatches, el('p', { className: 'advisor-note' }, 'Warna pertama untuk dinding. Klik warna untuk langsung memakainya.')]
+        : []),
+      ...(r.floor ? [el('h4', {}, 'Lantai'), el('p', {}, FLOOR_MATERIALS[r.floor].label)] : []),
       ...(r.furniture.length ? [el('h4', {}, 'Furnitur yang cocok'), furniture, el('p', { className: 'advisor-note' }, 'Klik untuk menaruhnya di denah.')] : []),
       ...(r.tips.length ? [el('h4', {}, 'Tips'), el('ul', {}, ...r.tips.map((t) => el('li', {}, t)))] : []),
       apply,

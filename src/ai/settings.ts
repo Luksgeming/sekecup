@@ -19,8 +19,11 @@ const browserStore = (): KeyStore | undefined => {
   }
 };
 
+// used for the rest of the session when the browser refuses to store settings
+let session: AiSettings | undefined;
+
 export function loadSettings(store: KeyStore | undefined = browserStore()): AiSettings {
-  const fallback: AiSettings = { provider: 'gemini', apiKey: '', model: '' };
+  const fallback: AiSettings = session ?? { provider: 'gemini', apiKey: '', model: '' };
   try {
     const raw = store?.getItem(KEY);
     if (!raw) return fallback;
@@ -36,8 +39,9 @@ export function loadSettings(store: KeyStore | undefined = browserStore()): AiSe
 }
 
 export function saveSettings(s: AiSettings, store: KeyStore | undefined = browserStore()): boolean {
+  session = { provider: s.provider, apiKey: s.apiKey.trim(), model: s.model.trim() };
   try {
-    store?.setItem(KEY, JSON.stringify({ provider: s.provider, apiKey: s.apiKey.trim(), model: s.model.trim() }));
+    store?.setItem(KEY, JSON.stringify(session));
     return store !== undefined;
   } catch {
     return false;

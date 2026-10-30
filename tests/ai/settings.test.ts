@@ -7,6 +7,7 @@ const memory = (): KeyStore => {
 };
 
 describe('AI settings', () => {
+  // runs first, before any save in this file sets the session fallback
   it('starts with no key and Gemini selected', () => {
     expect(loadSettings(memory())).toEqual({ provider: 'gemini', apiKey: '', model: '' });
   });
@@ -17,9 +18,9 @@ describe('AI settings', () => {
     expect(loadSettings(s)).toEqual({ provider: 'openai', apiKey: 'sk-1', model: 'gpt-x' });
   });
 
-  it('survives blocked storage', () => {
+  it('keeps the key for this session when storage is blocked', () => {
     const broken: KeyStore = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); } };
-    expect(loadSettings(broken).apiKey).toBe('');
-    expect(saveSettings({ provider: 'gemini', apiKey: 'k', model: '' }, broken)).toBe(false);
+    expect(saveSettings({ provider: 'gemini', apiKey: 'k-session', model: '' }, broken)).toBe(false);
+    expect(loadSettings(broken).apiKey).toBe('k-session');
   });
 });

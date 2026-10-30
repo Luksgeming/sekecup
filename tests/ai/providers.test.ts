@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildRequest, errorMessage, parseRecommendation, readResponse } from '../../src/ai/providers';
+import { analyzeWithAi, buildRequest, errorMessage, parseRecommendation, readResponse } from '../../src/ai/providers';
 import { DEFAULT_MODELS } from '../../src/ai/settings';
 
 describe('buildRequest', () => {
@@ -69,7 +69,8 @@ describe('parseRecommendation', () => {
 
   it('drops unknown furniture, colors and floors but keeps the rest', () => {
     const r = parseRecommendation(JSON.stringify({ ...good, furniture: ['jacuzzi', 'tanaman', 'constructor'], palette: ['red', '#112233', '#445566', '#778899'], floor: 'lava' }));
-    expect(r).toMatchObject({ furniture: ['tanaman'], palette: ['#112233', '#445566', '#778899'], floor: 'keramik' });
+    expect(r).toMatchObject({ furniture: ['tanaman'], palette: ['#112233', '#445566', '#778899'] });
+    expect((r as { floor?: string }).floor).toBeUndefined();
   });
 
   it('rejects text with no JSON', () => {
@@ -83,5 +84,44 @@ describe('errorMessage', () => {
     expect(errorMessage(403)).toContain('API key');
     expect(errorMessage(429)).toContain('Kuota');
     expect(errorMessage(500)).toContain('500');
+  });
+});
+
+describe('review fixes', () => {
+  it('explains a wrong Gemini key that comes back as 400', () => {
+    const body = { error: { code: 400, status: 'INVALID_ARGUMENT', message: 'API key not valid.', details: [{ reason: 'API_KEY_INVALID' }] } };
+    expect(errorMessage(400, body)).toContain('API key');
+  });
+
+  it('calls OpenAI insufficient_quota a quota problem', () => {
+    expect(errorMessage(429, { error: { code: 'insufficient_quota' } })).toContain('Kuota');
+  });
+
+  it('leaves out an unknown floor instead of inventing one', () => {
+    const r = parseRecommendation(JSON.stringify({ style: 'X', palette: ['#112233'], floor: 'parket', furniture: [], tips: [] }));
+    expect(r).not.toHaveProperty('error');
+    expect((r as { floor?: string }).floor).toBeUndefined();
+  });
+
+  it('keeps an empty palette empty', () => {
+    const r = parseRecommendation(JSON.stringify({ style: 'X', palette: ['merah'], floor: 'kayu', furniture: [], tips: [] }));
+    expect((r as { palette: string[] }).palette).toEqual([]);
+  });
+
+  it('fails when nothing usable is left', () => {
+    expect(parseRecommendation(JSON.stringify({ style: 'X', palette: [], floor: 'lava', furniture: ['jacuzzi'], tips: [] }))).toHaveProperty('error');
+  });
+
+  it('turns a network failure into a message', async () => {
+    const r = await analyzeWithAi({ provider: 'gemini', apiKey: 'k', model: '' }, 'A', 'image/jpeg', () => Promise.reject(new TypeError('offline')));
+    expect(r).toHaveProperty('error');
+    expect((r as { error: string }).error).toContain('internet');
+  });
+
+  it('gives up after the timeout', async () => {
+    const hang = (_u: string, init?: RequestInit) =>
+      new Promise<Response>((_, reject) => init?.signal?.addEventListener('abort', () => reject(new DOMException('timeout', 'TimeoutError'))));
+    const r = await analyzeWithAi({ provider: 'gemini', apiKey: 'k', model: '' }, 'A', 'image/jpeg', hang, 20);
+    expect((r as { error: string }).error).toContain('terlalu lama');
   });
 });

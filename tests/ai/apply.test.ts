@@ -32,3 +32,17 @@ describe('applyRecommendation', () => {
     expect(applyRecommendation(p, rec)).toBe(p);
   });
 });
+
+describe('partial suggestions', () => {
+  it('leaves floors alone when the suggestion has no floor', () => {
+    const q = applyRecommendation(house(), { palette: ['#112233'] });
+    expect(q.rooms.every((r) => r.floor === 'keramik')).toBe(true);
+    expect(q.walls[0].color).toBe('#112233');
+  });
+
+  it('leaves walls alone when the palette is empty', () => {
+    const q = applyRecommendation(house(), { palette: [], floor: 'marmer' });
+    expect(q.walls[0].color).toBe('#f2efe8');
+    expect(q.rooms[0].floor).toBe('marmer');
+  });
+});
