@@ -26,7 +26,11 @@ export function createToolbar(
   el: HTMLElement,
   onTool: (t: ToolName) => void,
   groups: ToolbarAction[][],
-): { setTool: (t: ToolName) => void; setEnabled: (id: string, enabled: boolean) => void } {
+): {
+  setTool: (t: ToolName) => void;
+  setEnabled: (id: string, enabled: boolean) => void;
+  setPressed: (id: string, pressed: boolean) => void;
+} {
   el.replaceChildren();
 
   const brand = document.createElement('div');
@@ -59,6 +63,9 @@ export function createToolbar(
     setEnabled(id, enabled) {
       const b = actionButtons.get(id);
       if (b) b.disabled = !enabled;
+    },
+    setPressed(id, pressed) {
+      actionButtons.get(id)?.setAttribute('aria-pressed', String(pressed));
     },
   };
 }
