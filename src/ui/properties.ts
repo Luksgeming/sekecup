@@ -15,6 +15,11 @@ type Field = {
 
 const m = (v: number) => `${v.toFixed(2)}`;
 
+/** Like parseLength, but 0 is allowed (a distance or a floor-level sill). */
+function zeroOrMore(text: string): number | undefined {
+  return text.trim() !== '' && Number(text.trim().replace(',', '.')) === 0 ? 0 : parseLength(text);
+}
+
 export function createPropertiesPanel(
   container: HTMLElement,
   store: Store,
@@ -55,9 +60,8 @@ export function createPropertiesPanel(
           label: 'Jarak dari ujung dinding (m)',
           value: m(o.offset - o.width / 2),
           commit: (text) => {
-            // 0 is a valid distance here, so parse it directly instead of with parseLength
-            const v = Number(text.trim().replace(',', '.'));
-            return text.trim() === '' || !Number.isFinite(v) ? undefined : updateOpening(p, o.id, { offset: v + o.width / 2 });
+            const v = zeroOrMore(text);
+            return v === undefined ? undefined : updateOpening(p, o.id, { offset: v + o.width / 2 });
           },
         },
       ];
@@ -65,7 +69,10 @@ export function createPropertiesPanel(
         fields.splice(2, 0, {
           label: 'Tinggi ambang (m)',
           value: m(o.sill),
-          commit: withLength((v) => updateOpening(p, o.id, { sill: v })),
+          commit: (text) => {
+            const v = zeroOrMore(text);
+            return v === undefined ? undefined : updateOpening(p, o.id, { sill: v });
+          },
         });
       }
       return { title: o.type === 'door' ? 'Pintu' : 'Jendela', fields };
@@ -91,7 +98,7 @@ export function createPropertiesPanel(
     const h = document.createElement('h2');
     h.textContent = view.title;
     panel.append(h);
-    for (const f of view.fields) panel.append(fieldElement(f));
+    view.fields.forEach((f, i) => panel.append(fieldElement(f, i)));
     if (view.note) {
       const note = document.createElement('p');
       note.textContent = view.note;
@@ -99,7 +106,7 @@ export function createPropertiesPanel(
     }
   }
 
-  function fieldElement(f: Field): HTMLElement {
+  function fieldElement(f: Field, index: number): HTMLElement {
     const label = document.createElement('label');
     label.textContent = f.label;
     const input = document.createElement('input');
@@ -115,7 +122,11 @@ export function createPropertiesPanel(
       }
     });
     input.addEventListener('change', () => {
-      const r = f.commit(input.value);
+      // rebuild the field from the current drawing, so a save never undoes a newer change
+      const sel = getSelection();
+      const fresh = sel && fieldsFor(sel, store.project)?.fields[index];
+      if (!fresh) return;
+      const r = fresh.commit(input.value);
       if (r === undefined) onMessage('Nilai tidak valid');
       else if ('error' in r) onMessage(r.error);
       else store.apply(r);

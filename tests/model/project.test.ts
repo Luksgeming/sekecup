@@ -228,3 +228,26 @@ describe('room cleanup', () => {
     expect(addRoom(emptyProject(), 'Garis', [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 4, y: 0 }])).toHaveProperty('error');
   });
 });
+
+describe('review fixes 1.5', () => {
+  const rect = () => {
+    let p = emptyProject();
+    const pts = [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }, { x: 0, y: 3 }];
+    pts.forEach((a, i) => (p = addWall(p, a, pts[(i + 1) % 4])));
+    return addRoom(p, 'Kamar', pts) as Project;
+  };
+
+  it('changing a wall length in the panel keeps the next wall joined', () => {
+    const p = rect();
+    const q = updateWall(p, p.walls[0].id, { length: 5 }) as Project;
+    expect(q.walls[0].b).toEqual({ x: 5, y: 0 });
+    expect(q.walls[1].a).toEqual({ x: 5, y: 0 });
+    expect(q.rooms[0].points[1]).toEqual({ x: 5, y: 0 });
+  });
+
+  it('rejects absurd thickness or height', () => {
+    const p = withWall();
+    expect(updateWall(p, p.walls[0].id, { thickness: 20 })).toHaveProperty('error');
+    expect(updateWall(p, p.walls[0].id, { height: 50 })).toHaveProperty('error');
+  });
+});

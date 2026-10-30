@@ -87,3 +87,18 @@ describe('autosave robustness', () => {
     expect(store.project).toBe(drawn);
   });
 });
+
+describe('autosave early edits', () => {
+  it('saves work drawn while the saved copy was still loading', async () => {
+    let release!: (v: string | undefined) => void;
+    const data = new Map<string, string>();
+    const kv: KeyValue = { get: () => new Promise((r) => (release = r)), set: async (k, v) => void data.set(k, v) };
+    const store = new Store(emptyProject());
+    const pending = startAutosave(store, kv);
+    store.apply(addWall(store.project, { x: 0, y: 0 }, { x: 1, y: 0 }));
+    release(undefined);
+    const a = await pending;
+    await a.flush();
+    expect(data.get('rea:current')).toContain('"walls"');
+  });
+});

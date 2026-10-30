@@ -45,7 +45,8 @@ export async function startAutosave(
   }
 
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let dirty = false;
+  // anything drawn while the saved copy was loading still needs saving
+  let dirty = store.project !== before;
   let reported = false;
 
   const flush = async () => {

@@ -8,6 +8,8 @@ import { askText } from '../ui/dialog';
 import { parseLength } from '../geometry/length';
 import { handleClick, handleKey, handleLengthInput, initialToolState, nearestWall, reconcile, type ToolName, type ToolResult, type ToolState } from './tools';
 
+const DRAG_THRESHOLD_PX = 4;
+
 const COLORS = {
   bg: '#f7f5f0',
   gridMinor: '#ebe7de',
@@ -31,7 +33,8 @@ export class PlanView {
   private panning?: { start: Vec2; center: Vec2 };
   private spaceDown = false;
   private lengthInput?: HTMLInputElement;
-  private drag?: { from: Vec2; preview?: Project };
+  // a press on a corner becomes a drag only after the pointer really moves
+  private drag?: { from: Vec2; down: Vec2; shift: boolean; moved: boolean; preview?: Project };
   private shiftDown = false;
 
   onMessage: (msg: string) => void = () => {};
@@ -201,7 +204,7 @@ export class PlanView {
         const from = cornerAt(this.store.project, world, 10 / this.zoom);
         if (from) {
           c.setPointerCapture(e.pointerId);
-          this.drag = { from };
+          this.drag = { from, down: this.eventPoint(e), shift: e.shiftKey, moved: false };
           return;
         }
       }
@@ -215,7 +218,8 @@ export class PlanView {
       }
       this.shiftDown = e.shiftKey;
       this.hover = this.toWorld(s);
-      if (this.drag) {
+      if (this.drag && !this.drag.moved && dist(s, this.drag.down) > DRAG_THRESHOLD_PX) this.drag.moved = true;
+      if (this.drag?.moved) {
         const r = moveCorner(this.store.project, this.drag.from, this.dragTarget());
         this.drag.preview = 'error' in r ? undefined : r;
       }
@@ -224,11 +228,24 @@ export class PlanView {
 
     c.addEventListener('pointerup', () => {
       this.panning = undefined;
-      if (!this.drag) return;
-      const r = moveCorner(this.store.project, this.drag.from, this.dragTarget());
+      const drag = this.drag;
+      if (!drag) return;
+      if (!drag.moved) {
+        // just a click: select what is under the corner instead of moving it
+        this.drag = undefined;
+        const at = this.toWorld(drag.down);
+        this.applyResult(handleClick(this.state, this.store.project, at, { shift: drag.shift }));
+        return;
+      }
+      const r = moveCorner(this.store.project, drag.from, this.dragTarget());
       this.drag = undefined;
       if ('error' in r) this.onMessage(r.error);
       else this.store.apply(r);
+      this.draw();
+    });
+    c.addEventListener('pointercancel', () => {
+      this.panning = undefined;
+      this.drag = undefined;
       this.draw();
     });
     c.addEventListener('pointerleave', () => {

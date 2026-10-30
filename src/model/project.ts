@@ -76,6 +76,9 @@ export function removeRoom(p: Project, id: string): Project {
 
 const same = (a: number, b: number) => Math.abs(a - b) < 1e-9;
 
+const MAX_THICKNESS = 1;
+const MAX_HEIGHT = 10;
+
 export function updateWall(
   p: Project,
   id: string,
@@ -87,17 +90,27 @@ export function updateWall(
   const oldLength = dist(wall.a, wall.b);
   const length = patch.length ?? oldLength;
   if (!(thickness > 0) || !(height > 0) || !(length >= MIN_WALL_LENGTH)) return { error: 'Ukuran harus lebih dari 0' };
+  if (thickness > MAX_THICKNESS) return { error: `Tebal dinding maksimal ${MAX_THICKNESS} m` };
+  if (height > MAX_HEIGHT) return { error: `Tinggi dinding maksimal ${MAX_HEIGHT} m` };
   if (same(thickness, wall.thickness) && same(height, wall.height) && same(length, oldLength)) return p;
 
-  const k = length / oldLength;
-  const b = { x: wall.a.x + (wall.b.x - wall.a.x) * k, y: wall.a.y + (wall.b.y - wall.a.y) * k };
-  const next: Wall = { ...wall, thickness, height, b };
-  const own = p.openings.filter((o) => o.wallId === id);
+  // a new length moves the corner at b, so walls and rooms joined there move with it
+  let base = p;
+  if (!same(length, oldLength)) {
+    const k = length / oldLength;
+    const b = { x: wall.a.x + (wall.b.x - wall.a.x) * k, y: wall.a.y + (wall.b.y - wall.a.y) * k };
+    const moved = moveCorner(p, wall.b, b);
+    if ('error' in moved) return { error: `Tidak bisa mengubah panjang: ${moved.error.toLowerCase()}` };
+    base = moved;
+  }
+
+  const next: Wall = { ...base.walls.find((w) => w.id === id)!, thickness, height };
+  const own = base.openings.filter((o) => o.wallId === id);
   for (const o of own) {
     const error = validateOpening(next, o, own.filter((x) => x.id !== o.id));
     if (error) return { error: `Pintu/jendela di dinding ini jadi tidak muat (${error.toLowerCase()})` };
   }
-  return { ...p, walls: p.walls.map((w) => (w.id === id ? next : w)) };
+  return { ...base, walls: base.walls.map((w) => (w.id === id ? next : w)) };
 }
 
 export function updateOpening(
