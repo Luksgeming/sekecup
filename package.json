@@ -7,9 +7,12 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4",
     "@types/three": "^0.186.0",
     "typescript": "~7.0.2",
     "vite": "^8.3.5",
