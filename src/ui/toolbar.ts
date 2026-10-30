@@ -8,14 +8,16 @@ const TOOLS: { tool: ToolName; label: string; key: string }[] = [
   { tool: 'door', label: 'Pintu', key: 'D' },
   { tool: 'window', label: 'Jendela', key: 'J' },
   { tool: 'room', label: 'Ruangan', key: 'R' },
+  { tool: 'furniture', label: 'Furnitur', key: 'F' },
 ];
 
 export const TOOL_HINTS: Record<ToolName, string> = {
-  select: 'Klik untuk memilih, Delete untuk menghapus. Seret titik sudut untuk mengubah bentuk.',
+  select: 'Klik untuk memilih, Delete untuk menghapus. Seret sudut atau furnitur untuk memindah, R untuk memutar.',
   wall: 'Klik titik demi titik untuk menggambar dinding. Ketik angka (mis. 4.5) untuk panjang pasti. Shift = lurus. Esc = selesai.',
   door: 'Klik di dinding untuk memasang pintu.',
   window: 'Klik di dinding untuk memasang jendela.',
   room: 'Klik sudut-sudut ruangan, atau ketik panjang sisi. Klik titik awal atau Enter untuk selesai.',
+  furniture: 'Klik di denah untuk menaruh furnitur yang dipilih.',
 };
 
 export function toolForKey(key: string): ToolName | undefined {

@@ -3,8 +3,10 @@ import { registerSW } from 'virtual:pwa-register';
 import { emptyProject, isEmptyProject } from './model/project';
 import { Store } from './model/store';
 import { isTextField, PlanView } from './plan/PlanView';
+import type { ToolName } from './plan/tools';
 import { confirmDialog } from './ui/dialog';
 import { createPropertiesPanel } from './ui/properties';
+import { createCatalogPanel } from './ui/catalogPanel';
 import { View3D } from './view3d/View3D';
 import { startAutosave } from './storage/autosave';
 import { parseProject, PROJECT_EXTENSION, serializeProject } from './io/projectFile';
@@ -92,7 +94,18 @@ function redo(): void {
   store.redo();
 }
 
-const toolbar = createToolbar(toolbarEl, (t) => plan.setTool(t), [
+const catalog = createCatalogPanel(document.querySelector<HTMLElement>('#plan-pane')!, (kind) => plan.placeFurniture(kind));
+
+function chooseTool(t: ToolName): void {
+  if (t === 'furniture') {
+    catalog.toggle();
+    return;
+  }
+  catalog.hide();
+  plan.setTool(t);
+}
+
+const toolbar = createToolbar(toolbarEl, chooseTool, [
   [
     { id: 'new', label: 'Baru', title: 'Gambar baru', run: () => void newProject() },
     { id: 'open', label: 'Buka', title: 'Buka file .rea.json', run: () => void openProjectFile() },
@@ -160,7 +173,7 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   const tool = toolForKey(e.key);
-  if (tool) plan.setTool(tool);
+  if (tool) chooseTool(tool);
 });
 
 function showStorageBanner(): void {

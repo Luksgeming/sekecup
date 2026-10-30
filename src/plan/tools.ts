@@ -1,4 +1,6 @@
-import { addOpening, addRoom, addWall, removeOpening, removeRoom, removeWall } from '../model/project';
+import { addFurniture, addOpening, addRoom, addWall, removeFurniture, removeOpening, removeRoom, removeWall, updateFurniture } from '../model/project';
+import { furnitureAt } from '../geometry/footprint';
+import type { FurnitureKind } from '../interior/kinds';
 import { DOOR_DEFAULTS, WINDOW_DEFAULTS, type Project, type Vec2, type Wall } from '../model/types';
 import { pointInPolygon, polygonArea } from '../geometry/polygon';
 import { snapPoint } from '../geometry/snap';
@@ -6,11 +8,18 @@ import { dist } from '../geometry/vec';
 import { pointAtLength } from '../geometry/length';
 import { projectOnWall } from '../geometry/wallBoxes';
 
-export type ToolName = 'select' | 'wall' | 'door' | 'window' | 'room';
+export type ToolName = 'select' | 'wall' | 'door' | 'window' | 'room' | 'furniture';
 
-export type Selection = { kind: 'wall' | 'opening' | 'room'; id: string };
+export type Selection = { kind: 'wall' | 'opening' | 'room' | 'furniture'; id: string };
 
-export type ToolState = { tool: ToolName; draft: Vec2[]; hoverWallId?: string; selected?: Selection };
+export type ToolState = {
+  tool: ToolName;
+  draft: Vec2[];
+  hoverWallId?: string;
+  selected?: Selection;
+  /** The catalog item the furniture tool will place. */
+  placing?: FurnitureKind;
+};
 
 export type ToolResult = {
   state: ToolState;
@@ -25,6 +34,10 @@ export type ToolResult = {
 export type ToolContext = { promptName?: (suggested: string) => string | null };
 
 const WALL_PICK_DISTANCE = 0.3;
+const FURNITURE_GRID = 0.05;
+
+// rounded to the millimeter so saved files stay tidy
+const roundTo = (v: number, step: number) => +(Math.round(v / step) * step).toFixed(3);
 const CLOSE_ROOM_DISTANCE = 0.2;
 
 export const initialToolState = (): ToolState => ({ tool: 'wall', draft: [] });
@@ -79,6 +92,14 @@ export function handleClick(
       return { state: { ...state, draft: [...state.draft, pt] }, project };
     }
 
+    case 'furniture': {
+      if (!state.placing) return { state, project };
+      const at = { x: roundTo(world.x, FURNITURE_GRID), y: roundTo(world.y, FURNITURE_GRID) };
+      const next = addFurniture(project, state.placing, at);
+      const id = next.furniture.at(-1)!.id;
+      return { state: { ...state, tool: 'select', draft: [], selected: { kind: 'furniture', id } }, project: next };
+    }
+
     case 'select':
       return { state: { ...state, selected: pick(project, world) }, project };
   }
@@ -109,10 +130,15 @@ export function handleKey(state: ToolState, project: Project, key: string, ctx: 
     return { state: { ...state, draft: [], selected: undefined }, project, handled: busy };
   }
   if (key === 'Enter' && state.tool === 'room' && state.draft.length) return { ...finishRoom(state, project, ctx), handled: true };
+  if (key.toLowerCase() === 'r' && state.selected?.kind === 'furniture') {
+    const f = project.furniture.find((x) => x.id === state.selected!.id)!;
+    const next = updateFurniture(project, f.id, { rotation: f.rotation + 90 });
+    return { state, project: 'error' in next ? project : next, handled: true };
+  }
   if ((key === 'Delete' || key === 'Backspace') && state.selected) {
     const { kind, id } = state.selected;
-    const next =
-      kind === 'wall' ? removeWall(project, id) : kind === 'opening' ? removeOpening(project, id) : removeRoom(project, id);
+    const remove = { wall: removeWall, opening: removeOpening, room: removeRoom, furniture: removeFurniture }[kind];
+    const next = remove(project, id);
     return { state: { ...state, selected: undefined }, project: next, handled: true };
   }
   return { state, project, handled: false };
@@ -122,7 +148,7 @@ export function handleKey(state: ToolState, project: Project, key: string, ctx: 
 export function reconcile(state: ToolState, project: Project): ToolState {
   const sel = state.selected;
   if (!sel) return state;
-  const list = sel.kind === 'wall' ? project.walls : sel.kind === 'opening' ? project.openings : project.rooms;
+  const list = { wall: project.walls, opening: project.openings, room: project.rooms, furniture: project.furniture }[sel.kind];
   return list.some((x) => x.id === sel.id) ? state : { ...state, selected: undefined };
 }
 
@@ -138,6 +164,8 @@ function finishRoom(state: ToolState, project: Project, ctx: ToolContext): ToolR
 }
 
 function pick(project: Project, at: Vec2): ToolState['selected'] {
+  const item = furnitureAt(project, at);
+  if (item) return { kind: 'furniture', id: item.id };
   const wall = nearestWall(project, at, 0.2);
   if (wall) {
     const { offset } = projectOnWall(wall, at);

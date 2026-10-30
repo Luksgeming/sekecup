@@ -1,9 +1,11 @@
 import type { Store } from '../model/store';
-import type { Opening, Project, Vec2, Wall } from '../model/types';
+import type { Failure, Furniture, Opening, Project, Room, Vec2, Wall } from '../model/types';
 import { polygonArea } from '../geometry/polygon';
 import { snapPoint } from '../geometry/snap';
 import { add, dist, normalize, scale, sub } from '../geometry/vec';
-import { addRoom, cornerAt, moveCorner } from '../model/project';
+import { addRoom, cornerAt, moveCorner, moveFurniture } from '../model/project';
+import { footprint, furnitureAt } from '../geometry/footprint';
+import { FLOOR_MATERIALS, FURNITURE, type FurnitureKind } from '../interior/kinds';
 import { askText } from '../ui/dialog';
 import { parseLength } from '../geometry/length';
 import { handleClick, handleKey, handleLengthInput, initialToolState, nearestWall, reconcile, type ToolName, type ToolResult, type ToolState } from './tools';
@@ -33,8 +35,16 @@ export class PlanView {
   private panning?: { start: Vec2; center: Vec2 };
   private spaceDown = false;
   private lengthInput?: HTMLInputElement;
-  // a press on a corner becomes a drag only after the pointer really moves
-  private drag?: { from: Vec2; down: Vec2; shift: boolean; moved: boolean; preview?: Project };
+  // a press on a corner or furniture becomes a drag only after the pointer really moves
+  private drag?: {
+    from: Vec2;
+    down: Vec2;
+    shift: boolean;
+    moved: boolean;
+    preview?: Project;
+    /** Set when dragging furniture; `from` is then the grab point's offset from its center. */
+    furnitureId?: string;
+  };
   private shiftDown = false;
 
   onMessage: (msg: string) => void = () => {};
@@ -62,7 +72,12 @@ export class PlanView {
   }
 
   setTool(tool: ToolName): void {
-    this.setState({ ...this.state, tool, draft: [], selected: undefined });
+    this.setState({ ...this.state, tool, draft: [], selected: undefined, placing: undefined });
+  }
+
+  /** Arms the furniture tool: the next click on the plan places `kind`. */
+  placeFurniture(kind: FurnitureKind): void {
+    this.setState({ ...this.state, tool: 'furniture', draft: [], selected: undefined, placing: kind });
   }
 
   /** Runs a key through the active tool; returns true when it was handled. */
@@ -201,10 +216,14 @@ export class PlanView {
       if (e.button !== 0) return;
       const world = this.toWorld(this.eventPoint(e));
       if (this.state.tool === 'select') {
+        const down = this.eventPoint(e);
         const from = cornerAt(this.store.project, world, 10 / this.zoom);
-        if (from) {
+        const item = from ? undefined : furnitureAt(this.store.project, world);
+        if (from || item) {
           c.setPointerCapture(e.pointerId);
-          this.drag = { from, down: this.eventPoint(e), shift: e.shiftKey, moved: false };
+          this.drag = item
+            ? { from: sub(world, item), down, shift: e.shiftKey, moved: false, furnitureId: item.id }
+            : { from: from!, down, shift: e.shiftKey, moved: false };
           return;
         }
       }
@@ -220,7 +239,7 @@ export class PlanView {
       this.hover = this.toWorld(s);
       if (this.drag && !this.drag.moved && dist(s, this.drag.down) > DRAG_THRESHOLD_PX) this.drag.moved = true;
       if (this.drag?.moved) {
-        const r = moveCorner(this.store.project, this.drag.from, this.dragTarget());
+        const r = this.dragResult();
         this.drag.preview = 'error' in r ? undefined : r;
       }
       this.draw();
@@ -237,10 +256,11 @@ export class PlanView {
         this.applyResult(handleClick(this.state, this.store.project, at, { shift: drag.shift }));
         return;
       }
-      const r = moveCorner(this.store.project, drag.from, this.dragTarget());
+      const r = this.dragResult();
       this.drag = undefined;
       if ('error' in r) this.onMessage(r.error);
       else this.store.apply(r);
+      if (drag.furnitureId) this.setState({ ...this.state, selected: { kind: 'furniture', id: drag.furnitureId } });
       this.draw();
     });
     c.addEventListener('pointercancel', () => {
@@ -277,6 +297,15 @@ export class PlanView {
     });
   }
 
+  private dragResult(): Project | Failure {
+    const drag = this.drag!;
+    if (!drag.furnitureId) return moveCorner(this.store.project, drag.from, this.dragTarget());
+    const center = sub(this.hover ?? drag.from, drag.from);
+    const step = 0.05;
+    const at = { x: +(Math.round(center.x / step) * step).toFixed(3), y: +(Math.round(center.y / step) * step).toFixed(3) };
+    return moveFurniture(this.store.project, drag.furnitureId, at);
+  }
+
   private dragTarget(): Vec2 {
     const { from } = this.drag!;
     // snap to other corners, never to the walls being dragged
@@ -297,7 +326,8 @@ export class PlanView {
     ctx.fillStyle = COLORS.bg;
     ctx.fillRect(0, 0, w, h);
     this.drawGrid();
-    for (const r of p.rooms) this.drawRoom(r.points, this.isSelected('room', r.id));
+    for (const r of p.rooms) this.drawRoom(r, this.isSelected('room', r.id));
+    for (const f of p.furniture) this.drawFurniture(f, this.isSelected('furniture', f.id));
     for (const wall of p.walls) this.drawWall(wall, this.isSelected('wall', wall.id));
     for (const o of p.openings) {
       const wall = p.walls.find((x) => x.id === o.wallId);
@@ -346,15 +376,50 @@ export class PlanView {
     ctx.closePath();
   }
 
-  private drawRoom(points: Vec2[], selected: boolean): void {
-    this.polygonPath(points);
-    this.ctx.fillStyle = selected ? 'rgba(37, 99, 235, 0.15)' : COLORS.room;
+  private drawRoom(room: Room, selected: boolean): void {
+    this.polygonPath(room.points);
+    this.ctx.fillStyle = FLOOR_MATERIALS[room.floor].color;
+    this.ctx.globalAlpha = 0.55;
     this.ctx.fill();
+    this.ctx.globalAlpha = 1;
+    if (selected) {
+      this.ctx.fillStyle = 'rgba(37, 99, 235, 0.12)';
+      this.ctx.fill();
+    }
     if (selected) {
       this.ctx.strokeStyle = COLORS.selected;
       this.ctx.lineWidth = 2;
       this.ctx.stroke();
     }
+  }
+
+  private drawFurniture(f: Furniture, selected: boolean): void {
+    const { ctx } = this;
+    const corners = footprint(f);
+    this.polygonPath(corners);
+    ctx.fillStyle = f.color;
+    ctx.globalAlpha = f.kind === 'karpet' ? 0.5 : 0.85;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = selected ? COLORS.selected : 'rgba(43, 42, 39, 0.75)';
+    ctx.lineWidth = selected ? 2.5 : 1;
+    ctx.stroke();
+
+    // a short line on the back edge shows which way the piece faces
+    const back = [this.toScreen(corners[0]), this.toScreen(corners[1])];
+    ctx.lineWidth = selected ? 3 : 2.5;
+    ctx.beginPath();
+    ctx.moveTo(back[0].x, back[0].y);
+    ctx.lineTo(back[1].x, back[1].y);
+    ctx.stroke();
+
+    const { w, d } = FURNITURE[f.kind].size;
+    if (Math.min(w, d) * this.zoom < 28) return;
+    const c = this.toScreen(f);
+    ctx.fillStyle = '#2b2a27';
+    ctx.font = '10px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(FURNITURE[f.kind].label, c.x, c.y + 3);
   }
 
   private drawRoomLabel(name: string, points: Vec2[]): void {
@@ -455,6 +520,13 @@ export class PlanView {
   private drawDraft(p: Project): void {
     const { ctx } = this;
     if (this.state.tool === 'select') this.drawCorners(p);
+    if (this.state.tool === 'furniture' && this.state.placing && this.hover) {
+      // ghost of the piece under the cursor before it is placed
+      ctx.globalAlpha = 0.5;
+      const kind = this.state.placing;
+      this.drawFurniture({ id: '', kind, x: this.hover.x, y: this.hover.y, rotation: 0, color: FURNITURE[kind].color }, true);
+      ctx.globalAlpha = 1;
+    }
     const hover = this.snappedHover();
     const { tool, draft } = this.state;
 

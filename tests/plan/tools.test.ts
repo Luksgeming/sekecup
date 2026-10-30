@@ -171,3 +171,47 @@ describe('polish', () => {
     expect(handleKey(s, p, 'Delete').handled).toBe(true);
   });
 });
+
+describe('furniture tool', () => {
+  const placing: ToolState = { ...initialToolState(), tool: 'furniture', placing: 'sofa-3' };
+
+  it('places the chosen item and selects it', () => {
+    const r = handleClick(placing, emptyProject(), { x: 2.03, y: 1.01 }, noMods);
+    expect(r.project.furniture).toHaveLength(1);
+    expect(r.project.furniture[0]).toMatchObject({ kind: 'sofa-3', x: 2.05, y: 1 });
+    expect(r.state.selected).toEqual({ kind: 'furniture', id: r.project.furniture[0].id });
+    expect(r.state.tool).toBe('select');
+  });
+
+  it('does nothing without a chosen item', () => {
+    const p = emptyProject();
+    expect(handleClick({ ...initialToolState(), tool: 'furniture' }, p, { x: 1, y: 1 }, noMods).project).toBe(p);
+  });
+
+  it('select picks furniture before the wall behind it', () => {
+    const p = handleClick(placing, box(), { x: 2, y: 0.3 }, noMods).project;
+    const r = handleClick({ ...initialToolState(), tool: 'select' }, p, { x: 2, y: 0.3 }, noMods);
+    expect(r.state.selected?.kind).toBe('furniture');
+  });
+
+  it('R rotates the selected furniture by 90 degrees', () => {
+    const r = handleClick(placing, emptyProject(), { x: 1, y: 1 }, noMods);
+    const k = handleKey(r.state, r.project, 'r');
+    expect(k.handled).toBe(true);
+    expect(k.project.furniture[0].rotation).toBe(90);
+  });
+
+  it('R is not handled when nothing is selected', () => {
+    expect(handleKey({ ...initialToolState(), tool: 'select' }, emptyProject(), 'r').handled).toBe(false);
+  });
+
+  it('Delete removes the selected furniture', () => {
+    const r = handleClick(placing, emptyProject(), { x: 1, y: 1 }, noMods);
+    expect(handleKey(r.state, r.project, 'Delete').project.furniture).toHaveLength(0);
+  });
+
+  it('reconcile drops a furniture selection after it is gone', () => {
+    const s: ToolState = { ...initialToolState(), tool: 'select', selected: { kind: 'furniture', id: 'gone' } };
+    expect(reconcile(s, emptyProject()).selected).toBeUndefined();
+  });
+});

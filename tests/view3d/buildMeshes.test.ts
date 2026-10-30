@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { buildMeshes } from '../../src/view3d/buildMeshes';
-import { addOpening, addRoom, addWall, emptyProject } from '../../src/model/project';
+import { addFurniture, addOpening, addRoom, addWall, emptyProject, setWallColor, updateFurniture } from '../../src/model/project';
 import { WINDOW_DEFAULTS, type Project } from '../../src/model/types';
 
 const oneWall = () => addWall(emptyProject(), { x: 0, y: 0 }, { x: 4, y: 0 });
@@ -37,5 +37,26 @@ describe('buildMeshes', () => {
   it('adds one floor mesh per room', () => {
     const p = addRoom(emptyProject(), 'Kamar', [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }]) as Project;
     expect(ofKind(buildMeshes(p), 'floor')).toHaveLength(1);
+  });
+});
+
+describe('interior in 3D', () => {
+  it('places furniture at its plan position, rotated', () => {
+    let p = addFurniture(emptyProject(), 'kasur-double', { x: 3, y: 2 });
+    p = updateFurniture(p, p.furniture[0].id, { rotation: 90 }) as Project;
+    const items = ofKind(buildMeshes(p), 'furniture');
+    expect(items).toHaveLength(1);
+    const size = new THREE.Box3().setFromObject(items[0]).getSize(new THREE.Vector3());
+    expect(size.x).toBeCloseTo(2.0, 1);
+    expect(size.z).toBeCloseTo(1.6, 1);
+    expect(items[0].position.x).toBe(3);
+    expect(items[0].position.z).toBe(2);
+  });
+
+  it('paints walls with their color', () => {
+    let p = oneWall();
+    p = setWallColor(p, p.walls[0].id, '#9caf88') as Project;
+    const wall = ofKind(buildMeshes(p), 'wall')[0] as THREE.Mesh;
+    expect((wall.material as THREE.MeshStandardMaterial).color.getHexString()).toBe('9caf88');
   });
 });

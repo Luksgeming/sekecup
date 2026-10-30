@@ -2,12 +2,17 @@ import * as THREE from 'three';
 import type { Project, Wall } from '../model/types';
 import { dist, normalize, sub } from '../geometry/vec';
 import { wallBoxes } from '../geometry/wallBoxes';
+import { buildFurniture } from '../interior/catalog';
+import { floorMaterial } from '../interior/floorTextures';
 
-const MATERIALS = {
-  wall: new THREE.MeshStandardMaterial({ color: 0xf2efe8, roughness: 0.9 }),
-  glass: new THREE.MeshStandardMaterial({ color: 0x9cc8e8, transparent: true, opacity: 0.35, roughness: 0.1 }),
-  floor: new THREE.MeshStandardMaterial({ color: 0xd9c4a0, roughness: 0.8, side: THREE.DoubleSide }),
-};
+const GLASS = new THREE.MeshStandardMaterial({ color: 0x9cc8e8, transparent: true, opacity: 0.35, roughness: 0.1 });
+
+const wallMaterials = new Map<string, THREE.MeshStandardMaterial>();
+function wallMaterial(color: string): THREE.MeshStandardMaterial {
+  let m = wallMaterials.get(color);
+  if (!m) wallMaterials.set(color, (m = new THREE.MeshStandardMaterial({ color, roughness: 0.9 })));
+  return m;
+}
 
 const GLASS_THICKNESS = 0.02;
 
@@ -23,23 +28,32 @@ export function buildMeshes(p: Project): THREE.Group {
       // pieces at the wall ends grow by half the thickness so corners close
       const start = box.start <= 0 ? box.start - half : box.start;
       const end = box.end >= len ? box.end + half : box.end;
-      group.add(placeOnWall(wall, start, end, box.bottom, box.top, wall.thickness, MATERIALS.wall, 'wall'));
+      group.add(placeOnWall(wall, start, end, box.bottom, box.top, wall.thickness, wallMaterial(wall.color), 'wall'));
     }
     for (const o of p.openings) {
       if (o.wallId !== wall.id || o.type !== 'window') continue;
       const s = o.offset - o.width / 2;
-      group.add(placeOnWall(wall, s, s + o.width, o.sill, o.sill + o.height, GLASS_THICKNESS, MATERIALS.glass, 'glass'));
+      group.add(placeOnWall(wall, s, s + o.width, o.sill, o.sill + o.height, GLASS_THICKNESS, GLASS, 'glass'));
     }
   }
 
   for (const room of p.rooms) {
     const shape = new THREE.Shape(room.points.map((pt) => new THREE.Vector2(pt.x, pt.y)));
-    const mesh = new THREE.Mesh(new THREE.ShapeGeometry(shape), MATERIALS.floor);
+    const mesh = new THREE.Mesh(new THREE.ShapeGeometry(shape), floorMaterial(room.floor));
     mesh.rotation.x = Math.PI / 2;
     mesh.position.y = 0.002;
     mesh.receiveShadow = true;
     mesh.userData = { kind: 'floor', id: room.id };
     group.add(mesh);
+  }
+
+  for (const f of p.furniture) {
+    const item = buildFurniture(f.kind, f.color);
+    item.position.set(f.x, 0, f.y);
+    // plan rotation is clockwise on screen (y down), which is -y in three.js
+    item.rotation.y = -(f.rotation * Math.PI) / 180;
+    item.userData = { kind: 'furniture', id: f.id };
+    group.add(item);
   }
 
   return group;
