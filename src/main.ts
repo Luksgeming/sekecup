@@ -3,6 +3,7 @@ import { emptyProject, isEmptyProject } from './model/project';
 import { Store } from './model/store';
 import { isTextField, PlanView } from './plan/PlanView';
 import { confirmDialog } from './ui/dialog';
+import { createPropertiesPanel } from './ui/properties';
 import { View3D } from './view3d/View3D';
 import { startAutosave } from './storage/autosave';
 import { parseProject, PROJECT_EXTENSION, serializeProject } from './io/projectFile';
@@ -121,10 +122,14 @@ function toast(msg: string): void {
   toastTimer = window.setTimeout(() => (toastEl.hidden = true), 3000);
 }
 
+const properties = createPropertiesPanel(document.querySelector<HTMLElement>('#plan-pane')!, store, () => plan.toolState.selected, toast);
+store.subscribe(() => properties.refresh());
+
 plan.onMessage = toast;
 plan.onStateChange = (s) => {
   toolbar.setTool(s.tool);
   hintEl.textContent = TOOL_HINTS[s.tool];
+  properties.refresh();
 };
 plan.setTool('wall');
 

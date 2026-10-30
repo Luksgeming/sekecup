@@ -66,3 +66,53 @@ export function removeRoom(p: Project, id: string): Project {
   if (!p.rooms.some((r) => r.id === id)) return p;
   return { ...p, rooms: p.rooms.filter((r) => r.id !== id) };
 }
+
+const same = (a: number, b: number) => Math.abs(a - b) < 1e-9;
+
+export function updateWall(
+  p: Project,
+  id: string,
+  patch: Partial<Pick<Wall, 'thickness' | 'height'>> & { length?: number },
+): Project | Failure {
+  const wall = p.walls.find((w) => w.id === id);
+  if (!wall) return { error: 'Dinding tidak ditemukan' };
+  const { thickness = wall.thickness, height = wall.height } = patch;
+  const oldLength = dist(wall.a, wall.b);
+  const length = patch.length ?? oldLength;
+  if (!(thickness > 0) || !(height > 0) || !(length >= MIN_WALL_LENGTH)) return { error: 'Ukuran harus lebih dari 0' };
+  if (same(thickness, wall.thickness) && same(height, wall.height) && same(length, oldLength)) return p;
+
+  const k = length / oldLength;
+  const b = { x: wall.a.x + (wall.b.x - wall.a.x) * k, y: wall.a.y + (wall.b.y - wall.a.y) * k };
+  const next: Wall = { ...wall, thickness, height, b };
+  const own = p.openings.filter((o) => o.wallId === id);
+  for (const o of own) {
+    const error = validateOpening(next, o, own.filter((x) => x.id !== o.id));
+    if (error) return { error: `Pintu/jendela di dinding ini jadi tidak muat (${error.toLowerCase()})` };
+  }
+  return { ...p, walls: p.walls.map((w) => (w.id === id ? next : w)) };
+}
+
+export function updateOpening(
+  p: Project,
+  id: string,
+  patch: Partial<Pick<Opening, 'width' | 'height' | 'sill' | 'offset'>>,
+): Project | Failure {
+  const o = p.openings.find((x) => x.id === id);
+  if (!o) return { error: 'Pintu/jendela tidak ditemukan' };
+  const next = { ...o, ...patch };
+  if ((['width', 'height', 'sill', 'offset'] as const).every((k) => same(next[k], o[k]))) return p;
+  const wall = p.walls.find((w) => w.id === o.wallId)!;
+  const error = validateOpening(wall, next, p.openings.filter((x) => x.id !== id));
+  if (error) return { error };
+  return { ...p, openings: p.openings.map((x) => (x.id === id ? next : x)) };
+}
+
+export function renameRoom(p: Project, id: string, name: string): Project | Failure {
+  const room = p.rooms.find((r) => r.id === id);
+  if (!room) return { error: 'Ruangan tidak ditemukan' };
+  const trimmed = name.trim();
+  if (!trimmed) return { error: 'Nama ruangan tidak boleh kosong' };
+  if (trimmed === room.name) return p;
+  return { ...p, rooms: p.rooms.map((r) => (r.id === id ? { ...r, name: trimmed } : r)) };
+}

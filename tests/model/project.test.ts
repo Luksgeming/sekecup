@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { emptyProject, addWall, removeWall, addOpening, addRoom, removeOpening, removeRoom, isEmptyProject } from '../../src/model/project';
+import { emptyProject, addWall, removeWall, addOpening, addRoom, removeOpening, removeRoom, isEmptyProject, updateWall, updateOpening, renameRoom } from '../../src/model/project';
 import type { Project } from '../../src/model/types';
 
 function withWall(): Project {
@@ -89,5 +89,83 @@ describe('review fixes: model', () => {
     const p = addRoom(emptyProject(), 'Kamar', [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }]) as Project;
     expect(isEmptyProject(p)).toBe(false);
     expect(isEmptyProject(emptyProject())).toBe(true);
+  });
+});
+
+describe('updateWall', () => {
+  it('changes thickness', () => {
+    const p = withWall();
+    const q = updateWall(p, p.walls[0].id, { thickness: 0.2 }) as Project;
+    expect(q.walls[0].thickness).toBe(0.2);
+  });
+
+  it('changes length by moving point b along the wall', () => {
+    const p = withWall();
+    const q = updateWall(p, p.walls[0].id, { length: 6 }) as Project;
+    expect(q.walls[0].b).toEqual({ x: 6, y: 0 });
+    expect(q.walls[0].a).toEqual({ x: 0, y: 0 });
+  });
+
+  it('rejects a height lower than a door on it', () => {
+    const p = door(withWall(), 2) as Project;
+    expect(updateWall(p, p.walls[0].id, { height: 2.0 })).toHaveProperty('error');
+  });
+
+  it('rejects a length that no longer fits a door', () => {
+    const p = door(withWall(), 2) as Project;
+    expect(updateWall(p, p.walls[0].id, { length: 1 })).toHaveProperty('error');
+  });
+
+  it('rejects zero or negative sizes', () => {
+    const p = withWall();
+    expect(updateWall(p, p.walls[0].id, { thickness: 0 })).toHaveProperty('error');
+    expect(updateWall(p, p.walls[0].id, { length: -1 })).toHaveProperty('error');
+  });
+
+  it('returns the same project when nothing changes', () => {
+    const p = withWall();
+    expect(updateWall(p, p.walls[0].id, { thickness: 0.15, length: 4 })).toBe(p);
+  });
+});
+
+describe('updateOpening', () => {
+  it('changes width', () => {
+    const p = door(withWall(), 2) as Project;
+    expect((updateOpening(p, p.openings[0].id, { width: 1 }) as Project).openings[0].width).toBe(1);
+  });
+
+  it('rejects a width that hits another opening', () => {
+    let p = door(withWall(), 1) as Project;
+    p = door(p, 2) as Project; // 1.55–2.45
+    expect(updateOpening(p, p.openings[0].id, { width: 1.4 })).toHaveProperty('error'); // 0.3–1.7
+  });
+
+  it('does not count the opening itself as an overlap', () => {
+    const p = door(withWall(), 2) as Project;
+    expect(updateOpening(p, p.openings[0].id, { offset: 2.1 })).not.toHaveProperty('error');
+  });
+
+  it('returns the same project when nothing changes', () => {
+    const p = door(withWall(), 2) as Project;
+    expect(updateOpening(p, p.openings[0].id, { width: 0.9 })).toBe(p);
+  });
+});
+
+describe('renameRoom', () => {
+  const room = () => addRoom(emptyProject(), 'Kamar', [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }]) as Project;
+
+  it('renames a room', () => {
+    const p = room();
+    expect((renameRoom(p, p.rooms[0].id, 'Dapur') as Project).rooms[0].name).toBe('Dapur');
+  });
+
+  it('rejects an empty name', () => {
+    const p = room();
+    expect(renameRoom(p, p.rooms[0].id, '  ')).toHaveProperty('error');
+  });
+
+  it('returns the same project for the same name', () => {
+    const p = room();
+    expect(renameRoom(p, p.rooms[0].id, 'Kamar')).toBe(p);
   });
 });
