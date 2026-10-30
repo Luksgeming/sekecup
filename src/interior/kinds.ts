@@ -3,7 +3,10 @@
 // w = width along x, d = depth along y on the plan, h = height. `rotation` turns
 // the model (degrees) so its front faces +y on the plan.
 
-export type FurnitureCategory = 'Kamar' | 'Ruang tamu' | 'Makan' | 'Dapur' | 'Kerja' | 'Tanaman' | 'Lampu & kipas';
+export type FurnitureCategory = 'Kamar' | 'Ruang tamu' | 'Makan' | 'Dapur' | 'Kamar mandi' | 'Kerja' | 'Tanaman' | 'Lampu & kipas';
+
+/** Order of the catalog sections. */
+export const CATEGORY_ORDER: FurnitureCategory[] = ['Kamar', 'Ruang tamu', 'Makan', 'Dapur', 'Kamar mandi', 'Kerja', 'Tanaman', 'Lampu & kipas'];
 
 export type FurnitureSpec = {
   label: string;
@@ -13,6 +16,8 @@ export type FurnitureSpec = {
   size: { w: number; d: number; h: number };
   /** 'ceiling' pieces hang from the ceiling instead of standing on the floor. */
   mount?: 'ceiling';
+  /** Contemporary pieces, listed first in each catalog section. */
+  modern?: boolean;
 };
 
 export const FURNITURE = {
@@ -82,18 +87,65 @@ export const FURNITURE = {
   'lampu-industri': { label: 'Lampu gantung industrial', category: 'Lampu & kipas', model: 'hanging_industrial_lamp', rotation: 0, size: { w: 0.55, d: 0.55, h: 1.35 }, mount: 'ceiling' },
   'lampu-panjang': { label: 'Lampu gantung panjang', category: 'Lampu & kipas', model: 'caged_hanging_light', rotation: 0, size: { w: 1.16, d: 0.32, h: 0.75 }, mount: 'ceiling' },
   'kipas-plafon': { label: 'Kipas angin plafon', category: 'Lampu & kipas', model: 'ceiling_fan', rotation: 0, size: { w: 1.46, d: 1.46, h: 0.52 }, mount: 'ceiling' },
+  // modern pieces: CC-BY models from Sketchfab via Objaverse, credited in public/models/CREDITS.md
+  'bufet-krem': { label: 'Bufet krem', category: 'Kamar', model: 'sf_1bf6da131b54', rotation: 0, size: { w: 0.82, d: 0.4, h: 1.0 }, modern: true },
+  'cermin-berdiri': { label: 'Cermin berdiri', category: 'Kamar', model: 'sf_a9d4471a881e', rotation: 0, size: { w: 1.0, d: 0.05, h: 1.7 }, modern: true },
+  'kasur-modern': { label: 'Kasur modern', category: 'Kamar', model: 'sf_a2b2645701c9', rotation: 0, size: { w: 2.74, d: 2.4, h: 1.16 }, modern: true },
+  'kasur-modern-putih': { label: 'Kasur modern putih', category: 'Kamar', model: 'sf_2bd3fcc82c9f', rotation: -90, size: { w: 1.75, d: 1.96, h: 1.5 }, modern: true },
+  'lemari-laci-cokelat': { label: 'Lemari laci cokelat', category: 'Kamar', model: 'sf_84589627d9bb', rotation: -90, size: { w: 1.94, d: 0.66, h: 0.97 }, modern: true },
+  'lemari-laci-putih': { label: 'Lemari laci putih', category: 'Kamar', model: 'sf_15562ed7b1d2', rotation: -90, size: { w: 1.94, d: 0.66, h: 0.97 }, modern: true },
+  'lemari-pakaian-kayu': { label: 'Lemari pakaian kayu', category: 'Kamar', model: 'sf_c6498b9aec67', rotation: 0, size: { w: 1.17, d: 0.61, h: 2.0 }, modern: true },
+  'lemari-pakaian-putih': { label: 'Lemari pakaian putih', category: 'Kamar', model: 'sf_36cf6013bae4', rotation: 0, size: { w: 1.58, d: 0.4, h: 2.2 }, modern: true },
+  'meja-rias': { label: 'Meja rias', category: 'Kamar', model: 'sf_02f2bd71a28a', rotation: 0, size: { w: 0.85, d: 0.37, h: 1.45 }, modern: true },
+  'kursi-ungu': { label: 'Kursi ungu modern', category: 'Ruang tamu', model: 'sf_f7f99449b896', rotation: 0, size: { w: 0.94, d: 0.71, h: 0.85 }, modern: true },
+  'lampu-lantai': { label: 'Lampu lantai', category: 'Ruang tamu', model: 'sf_33eb258d9873', rotation: 0, size: { w: 0.41, d: 0.41, h: 1.6 }, modern: true },
+  'sofa-abu': { label: 'Sofa abu modern', category: 'Ruang tamu', model: 'sf_b1155b5ebd7c', rotation: 0, size: { w: 2.72, d: 1.4, h: 0.82 }, modern: true },
+  'sofa-abu-gelap': { label: 'Sofa abu gelap', category: 'Ruang tamu', model: 'sf_9b1e09abe5e3', rotation: 0, size: { w: 2.69, d: 0.87, h: 0.8 }, modern: true },
+  'sofa-biru': { label: 'Sofa biru modern', category: 'Ruang tamu', model: 'sf_42da0122f213', rotation: 0, size: { w: 2.29, d: 0.95, h: 0.75 }, modern: true },
+  'sofa-italia': { label: 'Sofa Italia putih', category: 'Ruang tamu', model: 'sf_b70e7b02af84', rotation: 0, size: { w: 2.0, d: 0.92, h: 0.85 }, modern: true },
+  'sofa-kuning': { label: 'Sofa kuning (Vitra)', category: 'Ruang tamu', model: 'sf_9a2c5ed79d63', rotation: 0, size: { w: 2.35, d: 0.88, h: 0.83 }, modern: true },
+  'sofa-merah-muda': { label: 'Sofa merah muda', category: 'Ruang tamu', model: 'sf_ef3832963ab2', rotation: 0, size: { w: 2.19, d: 0.99, h: 0.78 }, modern: true },
+  'sofa-putih': { label: 'Sofa putih modern', category: 'Ruang tamu', model: 'sf_421e9b3fb951', rotation: 0, size: { w: 2.61, d: 1.28, h: 0.8 }, modern: true },
+  'sofa-sudut': { label: 'Sofa sudut', category: 'Ruang tamu', model: 'sf_048a7e91bec2', rotation: 0, size: { w: 2.54, d: 1.64, h: 0.85 }, modern: true },
+  'sofa-sudut-gelap': { label: 'Sofa sudut gelap', category: 'Ruang tamu', model: 'sf_9cef8fd19dd8', rotation: 0, size: { w: 3.36, d: 2.24, h: 0.85 }, modern: true },
+  'sofa-sudut-oranye': { label: 'Sofa sudut oranye', category: 'Ruang tamu', model: 'sf_de9a877244bf', rotation: 0, size: { w: 2.77, d: 2.17, h: 0.85 }, modern: true },
+  'sofa-velvet': { label: 'Sofa velvet', category: 'Ruang tamu', model: 'sf_f89111d31af7', rotation: 0, size: { w: 2.44, d: 0.83, h: 0.71 }, modern: true },
+  'kursi-besi-putih': { label: 'Kursi besi putih', category: 'Makan', model: 'sf_e2ed7d0eb052', rotation: 0, size: { w: 0.51, d: 0.51, h: 0.85 }, modern: true },
+  'kursi-tolix': { label: 'Kursi besi (Tolix)', category: 'Makan', model: 'sf_a83a693ec68f', rotation: 0, size: { w: 0.47, d: 0.51, h: 0.85 }, modern: true },
+  'meja-bundar-putih': { label: 'Meja bundar putih', category: 'Makan', model: 'sf_928d285bcb68', rotation: 0, size: { w: 0.9, d: 0.9, h: 0.75 }, modern: true },
+  'set-makan-kaca': { label: 'Set makan kaca', category: 'Makan', model: 'sf_98413ebb2208', rotation: 0, size: { w: 1.23, d: 1.29, h: 1.0 }, modern: true },
+  'set-makan-kayu': { label: 'Set makan kayu', category: 'Makan', model: 'sf_f8f4a3bbf71e', rotation: 0, size: { w: 2.09, d: 2.19, h: 1.0 }, modern: true },
+  'bak-cuci-lemari': { label: 'Bak cuci dengan lemari', category: 'Dapur', model: 'sf_4ff4cf0cedd5', rotation: 0, size: { w: 0.53, d: 0.58, h: 0.9 }, modern: true },
+  'kabinet-bak-cuci': { label: 'Kabinet bak cuci', category: 'Dapur', model: 'sf_fa65acd9358f', rotation: 0, size: { w: 1.69, d: 0.83, h: 0.9 }, modern: true },
+  'kitchen-set': { label: 'Kitchen set', category: 'Dapur', model: 'sf_5b08596fac96', rotation: 0, size: { w: 2.8, d: 0.71, h: 2.3 }, modern: true },
+  'kompor-gas': { label: 'Kompor gas', category: 'Dapur', model: 'sf_bcab82613d38', rotation: 0, size: { w: 0.51, d: 0.71, h: 1.45 }, modern: true },
+  'kompor-gas-6': { label: 'Kompor gas 6 tungku', category: 'Dapur', model: 'sf_b10785bcfc6e', rotation: 0, size: { w: 1.17, d: 0.69, h: 0.95 }, modern: true },
+  'kulkas': { label: 'Kulkas', category: 'Dapur', model: 'sf_2071bda681b6', rotation: 0, size: { w: 0.87, d: 0.75, h: 1.75 }, modern: true },
+  'kulkas-french-door': { label: 'Kulkas French door', category: 'Dapur', model: 'sf_ebe62ed6dd9b', rotation: 0, size: { w: 0.96, d: 0.62, h: 1.82 }, modern: true },
+  'bathtub-kaki': { label: 'Bathtub berkaki', category: 'Kamar mandi', model: 'sf_674b6c07743e', rotation: 90, size: { w: 1.77, d: 0.72, h: 0.52 }, modern: true },
+  'bathtub-modern': { label: 'Bathtub modern', category: 'Kamar mandi', model: 'sf_dcd691724f6b', rotation: 0, size: { w: 1.7, d: 0.8, h: 0.57 }, modern: true },
+  'kloset': { label: 'Kloset duduk', category: 'Kamar mandi', model: 'sf_132a8ee2af3a', rotation: 0, size: { w: 0.48, d: 0.61, h: 0.75 }, modern: true },
+  'kloset-kohler': { label: 'Kloset Kohler', category: 'Kamar mandi', model: 'sf_00b360de1846', rotation: -90, size: { w: 0.43, d: 0.76, h: 0.77 }, modern: true },
+  'wastafel-kabinet': { label: 'Wastafel kabinet', category: 'Kamar mandi', model: 'sf_12b9545d618d', rotation: -90, size: { w: 0.91, d: 0.46, h: 0.9 }, modern: true },
+  'meja-kerja-monitor': { label: 'Meja kerja + monitor', category: 'Kerja', model: 'sf_e8d10d0d2356', rotation: 0, size: { w: 1.72, d: 1.04, h: 1.15 }, modern: true },
+  'meja-kerja-putih': { label: 'Meja kerja putih', category: 'Kerja', model: 'sf_03c075bb2848', rotation: 0, size: { w: 1.33, d: 0.53, h: 1.15 }, modern: true },
 } satisfies Record<string, FurnitureSpec>;
 
 /** Kinds from older versions that have no realistic model; files that use them drop those pieces. */
-export const REMOVED_KINDS = new Set([
-  'kasur-single', 'karpet', 'kitchen-set', 'kulkas', 'kloset', 'wastafel', 'bathtub', 'shower', 'kursi-kerja', 'lampu-lantai',
-]);
+// (a name that is back in the catalog is no longer removed)
+export const REMOVED_KINDS = new Set(
+  ['kasur-single', 'karpet', 'kitchen-set', 'kulkas', 'kloset', 'wastafel', 'bathtub', 'shower', 'kursi-kerja', 'lampu-lantai'].filter(
+    (k) => !Object.hasOwn(FURNITURE, k),
+  ),
+);
 
 export type FurnitureKind = keyof typeof FURNITURE;
 
 export const FURNITURE_KINDS = Object.keys(FURNITURE) as FurnitureKind[];
 
 export const hangsFromCeiling = (kind: FurnitureKind): boolean => (FURNITURE[kind] as FurnitureSpec).mount === 'ceiling';
+
+export const isModern = (kind: FurnitureKind): boolean => (FURNITURE[kind] as FurnitureSpec).modern === true;
 
 export const isFurnitureKind = (v: unknown): v is FurnitureKind => typeof v === 'string' && Object.hasOwn(FURNITURE, v);
 

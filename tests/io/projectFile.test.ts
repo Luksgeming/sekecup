@@ -133,7 +133,7 @@ describe('version 2 hardening', () => {
 describe('furniture removed from the catalog', () => {
   it('drops pieces whose kind no longer exists and counts them', () => {
     const p = addFurniture(sample(), 'sofa-3', { x: 1, y: 1 });
-    const old = { ...p, furniture: [...p.furniture, { ...p.furniture[0], id: 'k1', kind: 'kulkas' }, { ...p.furniture[0], id: 'k2', kind: 'karpet' }] };
+    const old = { ...p, furniture: [...p.furniture, { ...p.furniture[0], id: 'k1', kind: 'shower' }, { ...p.furniture[0], id: 'k2', kind: 'karpet' }] };
     const r = parseProjectWithNotes(JSON.stringify(old));
     expect(r).not.toHaveProperty('error');
     const { project, dropped } = r as { project: Project; dropped: number };
@@ -159,5 +159,16 @@ describe('ceiling color in files', () => {
     const p = sample();
     const broken = { ...p, rooms: [{ ...p.rooms[0], ceilingColor: 'white' }] };
     expect(parseProject(JSON.stringify(broken))).toHaveProperty('error');
+  });
+});
+
+describe('kinds that came back', () => {
+  it('keeps pieces whose kind returned to the catalog under the same name', () => {
+    let p = addFurniture(sample(), 'kitchen-set', { x: 1, y: 1 });
+    p = addFurniture(p, 'kloset', { x: 2, y: 1 });
+    p = addFurniture(p, 'lampu-lantai', { x: 3, y: 1 });
+    const r = parseProjectWithNotes(serializeProject(p)) as { project: Project; dropped: number };
+    expect(r.dropped).toBe(0);
+    expect(r.project.furniture.map((f) => f.kind)).toEqual(['kitchen-set', 'kloset', 'lampu-lantai']);
   });
 });

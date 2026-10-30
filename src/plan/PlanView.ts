@@ -183,6 +183,12 @@ export class PlanView {
     const tableH = hasTable && this.scheduleBelow ? this.scheduleHeight(p) + 12 : 0;
     const margin = 36;
     const { x: w, y: h } = this.size;
+    // a hidden plan (3D-only view) has no size yet: fit once it is shown again
+    if (w < 80 || h < 80) {
+      this.fitWhenShown = true;
+      return;
+    }
+    this.fitWhenShown = false;
     const zoom = Math.min(
       (w - margin * 2 - tableW) / Math.max(max.x - min.x, 1),
       (h - margin * 2 - tableH) / Math.max(max.y - min.y, 1),
@@ -304,12 +310,16 @@ export class PlanView {
     else this.store.apply(r);
   }
 
+  private fitWhenShown = false;
+
   private resize(): void {
     const dpr = window.devicePixelRatio || 1;
     const { width, height } = this.canvas.getBoundingClientRect();
     this.canvas.width = Math.round(width * dpr);
     this.canvas.height = Math.round(height * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.hatch = undefined;
+    if (this.fitWhenShown && width >= 80 && height >= 80) this.fit();
     this.draw();
   }
 

@@ -405,3 +405,8 @@ body[data-plan-theme='cad'] .properties button.danger { color: #ff8a80; }
 body[data-plan-theme='cad'] .catalog,
 body[data-plan-theme='cad'] .dialog { background: var(--panel); color: var(--ink); }
 body[data-plan-theme='cad'] #banner { background: #4a3a12; color: #ffe8a8; border-color: #6b5418; }
+
+.catalog-credits { justify-self: start; margin-top: 6px; font-size: 12px; text-decoration: underline; color: var(--muted); padding: 2px 4px; }
+.credits { width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 64px); overflow-y: auto; }
+.credits ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: 12px; }
+.credits a { color: var(--accent); }

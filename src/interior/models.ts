@@ -12,6 +12,29 @@ const failed = new Set<FurnitureKind>();
 const listeners = new Set<() => void>();
 
 let loader: GLTFLoader | undefined;
+let environment: THREE.Texture | undefined;
+
+/** Reflections used by furniture materials (set once by the 3D view). */
+export function setFurnitureEnvironment(texture: THREE.Texture): void {
+  environment = texture;
+  for (const model of ready.values()) applyEnvironment(model);
+}
+
+const ENV_INTENSITY = 0.6;
+
+function applyEnvironment(model: THREE.Object3D): void {
+  if (!environment) return;
+  model.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return;
+    for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+      if (m instanceof THREE.MeshStandardMaterial) {
+        m.envMap = environment ?? null;
+        m.envMapIntensity = ENV_INTENSITY;
+        m.needsUpdate = true;
+      }
+    }
+  });
+}
 
 // hosts that cannot serve .glb get self-contained glTF JSON files instead
 const MODEL_EXT = import.meta.env.VITE_MODEL_EXT ?? 'glb';
@@ -30,6 +53,7 @@ function prepare(kind: FurnitureKind, scene: THREE.Object3D): THREE.Object3D {
   const center = box.getCenter(new THREE.Vector3());
   scene.position.set(-center.x, -box.min.y, -center.z);
   turn.scale.setScalar(k);
+  applyEnvironment(turn);
   turn.traverse((o) => {
     if (o instanceof THREE.Mesh) {
       o.castShadow = true;

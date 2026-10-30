@@ -17,11 +17,17 @@ function rect(x0: number, y0: number, x1: number, y1: number): [Vec2, Vec2][] {
   ];
 }
 
-type Shape = 'bed' | 'sofa' | 'chair' | 'table' | 'storage' | 'round' | 'stove' | 'lamp';
+type Shape = 'bed' | 'sofa' | 'chair' | 'table' | 'storage' | 'round' | 'stove' | 'lamp' | 'toilet' | 'bath' | 'sink' | 'fridge' | 'counter';
 
 function shapeOf(kind: FurnitureKind): Shape {
   if (hangsFromCeiling(kind)) return 'lamp';
-  if (kind === 'kompor') return 'stove';
+  if (/kompor/.test(kind)) return 'stove';
+  if (/kloset/.test(kind)) return 'toilet';
+  if (/bathtub/.test(kind)) return 'bath';
+  if (/wastafel|bak-cuci/.test(kind)) return 'sink';
+  if (/kulkas/.test(kind)) return 'fridge';
+  if (/kitchen-set/.test(kind)) return 'counter';
+  if (/lampu-lantai|cermin/.test(kind)) return /cermin/.test(kind) ? 'table' : 'round';
   if (/kasur|daybed/.test(kind)) return 'bed';
   if (/sofa/.test(kind)) return 'sofa';
   if (/kursi|bangku|ottoman/.test(kind)) return 'chair';
@@ -82,6 +88,30 @@ export function furnitureSymbol(kind: FurnitureKind): Symbol2D {
     case 'stove': {
       const r = Math.min(w, d) * 0.16;
       for (const sx of [-1, 1]) for (const sy of [-1, 1]) circles.push({ c: P((sx * w) / 4, (sy * d) / 4 - d * 0.05), r });
+      break;
+    }
+    case 'toilet': {
+      // tank against the wall, bowl in front
+      const tank = Math.min(0.2, d * 0.3);
+      lines.push([P(x0, y0 + tank), P(x1, y0 + tank)]);
+      circles.push({ c: P(0, y0 + tank + (d - tank) / 2), r: Math.min(w, d - tank) / 2 - 0.01 });
+      break;
+    }
+    case 'bath':
+      lines.push(...rect(x0 + inset, y0 + inset, x1 - inset, y1 - inset));
+      circles.push({ c: P(x0 + inset + 0.12, 0), r: Math.min(0.04, d / 6) });
+      break;
+    case 'sink':
+      circles.push({ c: P(0, 0), r: Math.min(w, d) * 0.3 });
+      break;
+    case 'fridge':
+      // CAD fridge: a box with a door line near the front
+      lines.push([P(x0, y1 - d * 0.12), P(x1, y1 - d * 0.12)]);
+      break;
+    case 'counter': {
+      // worktop edge plus a sink bowl
+      lines.push([P(x0, y1 - d * 0.1), P(x1, y1 - d * 0.1)]);
+      lines.push(...rect(-w * 0.12, y0 + d * 0.2, w * 0.12, y1 - d * 0.25));
       break;
     }
     case 'lamp': {

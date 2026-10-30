@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { moveFurniture } from '../model/project';
 import type { Store } from '../model/store';
 import type { Room, Vec2 } from '../model/types';
 import { buildMeshes, disposeGroup } from './buildMeshes';
 import { floorPoint } from './floorPoint';
 import { pointInPolygon } from '../geometry/polygon';
-import { isModelReady, loadModels, onModelLoaded } from '../interior/models';
+import { isModelReady, loadModels, onModelLoaded, setFurnitureEnvironment } from '../interior/models';
 
 const LOW_WALL_HEIGHT = 1.2;
 const EYE_HEIGHT = 1.6;
@@ -77,6 +78,9 @@ export class View3D {
     this.controls.addEventListener('change', () => this.requestRender());
     this.controls.addEventListener('start', () => (this.autoFit = false));
 
+    // soft reflections of a room on furniture only, so metal, glass and glossy finishes
+    // look real instead of black, while walls and floors keep their plain lighting
+    setFurnitureEnvironment(new THREE.PMREMGenerator(this.renderer).fromScene(new RoomEnvironment(), 0.04).texture);
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0xb9ad94, 1.6));
     const sun = new THREE.DirectionalLight(0xffffff, 2.2);
     sun.castShadow = true;

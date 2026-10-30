@@ -1,4 +1,39 @@
-import { FURNITURE, FURNITURE_KINDS, type FurnitureCategory, type FurnitureKind } from '../interior/kinds';
+import { CATEGORY_ORDER, FURNITURE, FURNITURE_KINDS, isModern, type FurnitureCategory, type FurnitureKind } from '../interior/kinds';
+import { MODEL_CREDITS } from '../interior/credits';
+
+/** Who made the models: CC-BY requires naming the authors. */
+function showCredits(): void {
+  const dialog = document.createElement('dialog');
+  dialog.className = 'dialog credits';
+  const h = document.createElement('h2');
+  h.textContent = 'Kredit model 3D';
+  const intro = document.createElement('p');
+  intro.textContent =
+    'Furnitur klasik: Poly Haven (polyhaven.com), lisensi CC0. Furnitur modern: model Sketchfab lewat Objaverse, lisensi CC BY 4.0, oleh:';
+  const list = document.createElement('ul');
+  for (const c of MODEL_CREDITS) {
+    const li = document.createElement('li');
+    const a = document.createElement('a');
+    a.href = c.url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.textContent = c.title;
+    li.append(a, ` — ${c.author} (${c.license})`);
+    list.append(li);
+  }
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'primary';
+  close.textContent = 'Tutup';
+  close.addEventListener('click', () => dialog.close());
+  const actions = document.createElement('div');
+  actions.className = 'dialog-actions';
+  actions.append(close);
+  dialog.append(h, intro, list, actions);
+  dialog.addEventListener('close', () => dialog.remove());
+  document.body.append(dialog);
+  dialog.showModal();
+}
 
 export function createCatalogPanel(
   container: HTMLElement,
@@ -20,13 +55,20 @@ export function createCatalogPanel(
   head.append(title, close);
   panel.append(head);
 
-  const groups = new Map<FurnitureCategory, FurnitureKind[]>();
-  for (const kind of FURNITURE_KINDS) {
-    const cat = FURNITURE[kind].category;
-    groups.set(cat, [...(groups.get(cat) ?? []), kind]);
-  }
+  const credits = document.createElement('button');
+  credits.type = 'button';
+  credits.className = 'catalog-credits';
+  credits.textContent = 'Kredit model';
+  credits.addEventListener('click', showCredits);
+  panel.append(credits);
+
+  // sections in a fixed order, modern pieces first within each
+  const groups = new Map<FurnitureCategory, FurnitureKind[]>(CATEGORY_ORDER.map((c) => [c, []]));
+  for (const kind of FURNITURE_KINDS) groups.get(FURNITURE[kind].category)!.push(kind);
+  for (const kinds of groups.values()) kinds.sort((a, b) => Number(isModern(b)) - Number(isModern(a)));
 
   for (const [category, kinds] of groups) {
+    if (!kinds.length) continue;
     const h = document.createElement('h3');
     h.textContent = category;
     const list = document.createElement('div');
@@ -44,7 +86,7 @@ export function createCatalogPanel(
       const text = document.createElement('span');
       text.textContent = spec.label;
       const size = document.createElement('small');
-      size.textContent = `${spec.size.w} × ${spec.size.d} m`;
+      size.textContent = `${spec.size.w} × ${spec.size.d} m${isModern(kind) ? ' · modern' : ''}`;
       text.append(size);
       item.append(dot, text);
       item.addEventListener('click', () => {
