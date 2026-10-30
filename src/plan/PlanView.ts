@@ -5,7 +5,8 @@ import { snapPoint } from '../geometry/snap';
 import { add, dist, normalize, scale, sub } from '../geometry/vec';
 import { addRoom } from '../model/project';
 import { askText } from '../ui/dialog';
-import { handleClick, handleKey, initialToolState, nearestWall, reconcile, type ToolName, type ToolResult, type ToolState } from './tools';
+import { parseLength } from '../geometry/length';
+import { handleClick, handleKey, handleLengthInput, initialToolState, nearestWall, reconcile, type ToolName, type ToolResult, type ToolState } from './tools';
 
 const COLORS = {
   bg: '#f7f5f0',
@@ -29,6 +30,7 @@ export class PlanView {
   private hover?: Vec2;
   private panning?: { start: Vec2; center: Vec2 };
   private spaceDown = false;
+  private lengthInput?: HTMLInputElement;
   private shiftDown = false;
 
   onMessage: (msg: string) => void = () => {};
@@ -64,6 +66,69 @@ export class PlanView {
     if (!['Escape', 'Enter', 'Delete', 'Backspace'].includes(key)) return false;
     this.applyResult(handleKey(this.state, this.store.project, key));
     return true;
+  }
+
+  /**
+   * Starts typing a length for the next wall/room point when a line is in progress.
+   * Returns true when the key was taken.
+   */
+  startLengthInput(key: string): boolean {
+    const { tool, draft } = this.state;
+    if ((tool !== 'wall' && tool !== 'room') || !draft.length || !/^[0-9.,]$/.test(key)) return false;
+    const input = this.lengthInput ?? this.createLengthInput();
+    input.value = key;
+    input.hidden = false;
+    this.positionLengthInput();
+    input.focus();
+    input.setSelectionRange(1, 1);
+    return true;
+  }
+
+  private createLengthInput(): HTMLInputElement {
+    const input = document.createElement('input');
+    input.className = 'length-input';
+    input.inputMode = 'decimal';
+    input.placeholder = 'm';
+    input.setAttribute('aria-label', 'Panjang (meter atau cm)');
+    input.hidden = true;
+    input.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Escape') this.hideLengthInput();
+      if (e.key !== 'Enter') return;
+      const len = parseLength(input.value);
+      if (len === undefined) {
+        this.onMessage('Ukuran tidak valid. Contoh: 4.5 atau 450cm');
+        return;
+      }
+      this.hideLengthInput();
+      this.applyLength(len);
+    });
+    input.addEventListener('blur', () => this.hideLengthInput());
+    this.canvas.parentElement!.append(input);
+    this.lengthInput = input;
+    return input;
+  }
+
+  private hideLengthInput(): void {
+    if (!this.lengthInput || this.lengthInput.hidden) return;
+    this.lengthInput.hidden = true;
+    this.lengthInput.blur();
+  }
+
+  private positionLengthInput(): void {
+    if (!this.lengthInput) return;
+    const at = this.toScreen(this.hover ?? this.state.draft.at(-1)!);
+    this.lengthInput.style.left = `${at.x + 14}px`;
+    this.lengthInput.style.top = `${at.y + 14}px`;
+  }
+
+  private applyLength(len: number): void {
+    const last = this.state.draft.at(-1)!;
+    const toward = this.hover ?? { x: last.x + 1, y: last.y };
+    // typing usually happens with the hand off Shift, so near-straight lines count as straight
+    const angle = Math.abs(Math.atan2(toward.y - last.y, toward.x - last.x)) % (Math.PI / 2);
+    const nearAxis = Math.min(angle, Math.PI / 2 - angle) < (5 * Math.PI) / 180;
+    this.applyResult(handleLengthInput(this.state, this.store.project, toward, len, { shift: this.shiftDown || nearAxis }));
   }
 
   /** Forgets the half-drawn line, e.g. after undo removed the wall it continued from. */

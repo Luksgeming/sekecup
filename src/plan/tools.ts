@@ -3,6 +3,7 @@ import { DOOR_DEFAULTS, WINDOW_DEFAULTS, type Project, type Vec2, type Wall } fr
 import { pointInPolygon, polygonArea } from '../geometry/polygon';
 import { snapPoint } from '../geometry/snap';
 import { dist } from '../geometry/vec';
+import { pointAtLength } from '../geometry/length';
 import { projectOnWall } from '../geometry/wallBoxes';
 
 export type ToolName = 'select' | 'wall' | 'door' | 'window' | 'room';
@@ -80,6 +81,25 @@ export function handleClick(
     case 'select':
       return { state: { ...state, selected: pick(project, world) }, project };
   }
+}
+
+/** Places the next wall/room point `length` meters from the last one, toward the cursor. */
+export function handleLengthInput(
+  state: ToolState,
+  project: Project,
+  toward: Vec2,
+  length: number,
+  mods: { shift: boolean },
+): ToolResult {
+  const last = state.draft.at(-1);
+  if (!last || (state.tool !== 'wall' && state.tool !== 'room')) return { state, project };
+  let aim = toward;
+  if (mods.shift) {
+    aim = Math.abs(toward.x - last.x) >= Math.abs(toward.y - last.y) ? { x: toward.x, y: last.y } : { x: last.x, y: toward.y };
+  }
+  const pt = pointAtLength(last, aim, length);
+  if (state.tool === 'room') return { state: { ...state, draft: [...state.draft, pt] }, project };
+  return { state: { ...state, draft: [pt] }, project: addWall(project, last, pt) };
 }
 
 export function handleKey(state: ToolState, project: Project, key: string, ctx: ToolContext = {}): ToolResult {

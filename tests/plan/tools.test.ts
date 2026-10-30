@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { handleClick, handleKey, initialToolState, reconcile, type ToolState } from '../../src/plan/tools';
+import { handleClick, handleKey, handleLengthInput, initialToolState, reconcile, type ToolState } from '../../src/plan/tools';
 import { addWall, addRoom, emptyProject } from '../../src/model/project';
 import type { Project } from '../../src/model/types';
 
@@ -127,5 +127,26 @@ describe('review fixes: tools', () => {
     const p = box();
     const s: ToolState = { ...initialToolState(), tool: 'select', selected: { kind: 'wall', id: p.walls[0].id } };
     expect(reconcile(s, p)).toBe(s);
+  });
+});
+
+describe('typed wall length', () => {
+  it('places the next point at the typed length, straight when shift is held', () => {
+    const start = handleClick(wallState(), emptyProject(), { x: 0, y: 0 }, noMods);
+    const r = handleLengthInput(start.state, start.project, { x: 3, y: 0.2 }, 4.5, { shift: true });
+    expect(r.project.walls).toHaveLength(1);
+    expect(r.project.walls[0].b).toEqual({ x: 4.5, y: 0 });
+    expect(r.state.draft).toEqual([{ x: 4.5, y: 0 }]);
+  });
+
+  it('adds a room corner at the typed length', () => {
+    let r = handleClick({ ...initialToolState(), tool: 'room' }, emptyProject(), { x: 0, y: 0 }, noMods);
+    r = handleLengthInput(r.state, r.project, { x: 0, y: 5 }, 3, noMods);
+    expect(r.state.draft).toEqual([{ x: 0, y: 0 }, { x: 0, y: 3 }]);
+  });
+
+  it('does nothing without a started line', () => {
+    const p = emptyProject();
+    expect(handleLengthInput(wallState(), p, { x: 1, y: 0 }, 2, noMods).project).toBe(p);
   });
 });

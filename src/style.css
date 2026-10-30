@@ -123,3 +123,17 @@ footer {
 .dialog-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 16px; }
 button.primary { background: var(--accent); color: var(--accent-ink); }
 button.primary:hover:not(:disabled) { background: #a5370a; }
+
+.length-input {
+  position: absolute;
+  width: 88px;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+.length-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }

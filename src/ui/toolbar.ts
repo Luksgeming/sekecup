@@ -12,10 +12,10 @@ const TOOLS: { tool: ToolName; label: string; key: string }[] = [
 
 export const TOOL_HINTS: Record<ToolName, string> = {
   select: 'Klik untuk memilih. Delete untuk menghapus.',
-  wall: 'Klik titik demi titik untuk menggambar dinding. Shift = lurus. Esc = selesai.',
+  wall: 'Klik titik demi titik untuk menggambar dinding. Ketik angka (mis. 4.5) untuk panjang pasti. Shift = lurus. Esc = selesai.',
   door: 'Klik di dinding untuk memasang pintu.',
   window: 'Klik di dinding untuk memasang jendela.',
-  room: 'Klik sudut-sudut ruangan. Klik titik awal atau Enter untuk selesai.',
+  room: 'Klik sudut-sudut ruangan, atau ketik panjang sisi. Klik titik awal atau Enter untuk selesai.',
 };
 
 export function toolForKey(key: string): ToolName | undefined {

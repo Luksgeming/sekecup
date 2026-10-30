@@ -149,6 +149,10 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     return;
   }
+  if (!e.altKey && plan.startLengthInput(e.key)) {
+    e.preventDefault();
+    return;
+  }
   const tool = toolForKey(e.key);
   if (tool) plan.setTool(tool);
 });
