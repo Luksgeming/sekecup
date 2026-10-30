@@ -3,8 +3,8 @@ import { dimensionsFor } from '../../src/plan/dimensions';
 import { roomSchedule } from '../../src/plan/schedule';
 import { parseCommand } from '../../src/plan/commands';
 import { furnitureSymbol } from '../../src/plan/symbols';
-import { LAYERS, loadLayers, saveLayers } from '../../src/plan/layers';
-import { addRoom, addWall, emptyProject } from '../../src/model/project';
+import { LAYERS, loadLayers, saveLayers, visibleForPicking } from '../../src/plan/layers';
+import { addFurniture, addRoom, addWall, emptyProject } from '../../src/model/project';
 import { FURNITURE, FURNITURE_KINDS, hangsFromCeiling } from '../../src/interior/kinds';
 import type { Project } from '../../src/model/types';
 
@@ -28,6 +28,17 @@ describe('dimensionsFor', () => {
 
   it('skips walls inside the house', () => {
     expect(dimensionsFor(house()).some((d) => d.from.x === 3.5 && d.to.x === 3.5)).toBe(false);
+  });
+
+  it('puts dimensions outside the inside corner of an L-shaped house', () => {
+    let p = emptyProject();
+    const pts = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 4 }, { x: 4, y: 4 }, { x: 4, y: 10 }, { x: 0, y: 10 }];
+    pts.forEach((a, i) => (p = addWall(p, a, pts[(i + 1) % pts.length])));
+    p = addRoom(p, 'L', pts) as Project;
+    const inner = dimensionsFor(p).find((d) => d.from.x === 10 && d.to.x === 4)!;
+    expect(inner).toBeDefined();
+    // the wall from (10,4) to (4,4): the house is above it (y < 4), so its dimension goes below
+    expect(inner.a.y).toBeGreaterThan(4);
   });
 
   it('dimensions every wall when there are no rooms yet', () => {
@@ -64,12 +75,17 @@ describe('parseCommand', () => {
     expect(parseCommand(text)).toEqual(expected);
   });
 
-  it('reads a bare number of 100 or more as millimeters', () => {
+  it('reads a whole number as millimeters', () => {
     expect(parseCommand('4500')).toEqual({ kind: 'length', meters: 4.5 });
+    expect(parseCommand('99')).toEqual({ kind: 'length', meters: 0.099 });
   });
 
-  it('reads a small bare number as meters', () => {
+  it('reads a decimal number as meters', () => {
     expect(parseCommand('4,5')).toEqual({ kind: 'length', meters: 4.5 });
+  });
+
+  it('explains a zero length', () => {
+    expect(parseCommand('0')).toEqual({ kind: 'unknown', text: '0' });
   });
 
   it('reads units', () => {
@@ -94,6 +110,19 @@ describe('furnitureSymbol', () => {
     }
     expect(sym.lines.length + sym.circles.length).toBeGreaterThan(0);
     expect(sym.dashed).toBe(hangsFromCeiling(kind));
+  });
+});
+
+describe('visibleForPicking', () => {
+  it('leaves hidden layers out of what can be clicked', () => {
+    let p = addFurniture(house(), 'sofa-3', { x: 1, y: 1 });
+    const all = { walls: true, hatch: true, openings: true, rooms: true, furniture: true, dimensions: true, schedule: true };
+    expect(visibleForPicking(p, all)).toBe(p);
+    const q = visibleForPicking(p, { ...all, furniture: false, walls: false });
+    expect(q.furniture).toHaveLength(0);
+    expect(q.walls).toHaveLength(0);
+    expect(q.openings).toHaveLength(0);
+    expect(q.rooms).toHaveLength(2);
   });
 });
 

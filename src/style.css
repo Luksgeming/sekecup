@@ -387,3 +387,21 @@ button.primary:hover:not(:disabled) { background: #a5370a; }
   color: var(--muted);
   pointer-events: none;
 }
+
+/* side panel can be closed to give the drawing more room */
+body[data-sidebar='hidden'] #sidebar { display: none; }
+@media (max-width: 1280px) {
+  #palette { width: 124px; }
+  #sidebar { width: 220px; }
+}
+
+/* dark theme: controls that used light backgrounds */
+body[data-plan-theme='cad'] .length-input { background: #1a2028; color: var(--ink); }
+body[data-plan-theme='cad'] .view3d-hint { background: rgba(22, 27, 34, 0.85); color: var(--ink); }
+body[data-plan-theme='cad'] .view3d-bar button { background: var(--panel); color: var(--ink); }
+body[data-plan-theme='cad'] button.primary { background: #ff9a4a; color: #161b22; }
+body[data-plan-theme='cad'] button.primary:hover:not(:disabled) { background: #ffb375; }
+body[data-plan-theme='cad'] .properties button.danger { color: #ff8a80; }
+body[data-plan-theme='cad'] .catalog,
+body[data-plan-theme='cad'] .dialog { background: var(--panel); color: var(--ink); }
+body[data-plan-theme='cad'] #banner { background: #4a3a12; color: #ffe8a8; border-color: #6b5418; }

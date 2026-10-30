@@ -7,12 +7,12 @@ import { addRoom, cornerAt, moveCorner, moveFurniture } from '../model/project';
 import { drawOrder, footprint, furnitureAt } from '../geometry/footprint';
 import { FLOOR_MATERIALS, FURNITURE, hangsFromCeiling, type FurnitureKind } from '../interior/kinds';
 import { askText } from '../ui/dialog';
-import { parseLength } from '../geometry/length';
+import { parseDrawingLength } from '../geometry/length';
 import { WheelGesture } from './navigation';
 import { dimensionsFor, type Dimension } from './dimensions';
 import { roomSchedule } from './schedule';
 import { furnitureSymbol } from './symbols';
-import { loadLayers, type LayerState } from './layers';
+import { loadLayers, visibleForPicking, type LayerState } from './layers';
 import { handleClick, handleKey, handleLengthInput, initialToolState, type Selection, nearestWall, reconcile, type ToolName, type ToolResult, type ToolState } from './tools';
 
 const DRAG_THRESHOLD_PX = 4;
@@ -22,6 +22,7 @@ const TOUCH_THRESHOLD_PX = 10;
 export type PlanTheme = 'cad' | 'paper';
 
 const SCHEDULE_WIDTH = 200;
+const SCHEDULE_ROW = 20;
 
 const CAD_FONT = "'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace";
 
@@ -82,6 +83,7 @@ export class PlanView {
   private panning?: { start: Vec2; center: Vec2; click?: { world: Vec2; shift: boolean }; moved?: boolean };
   private spaceDown = false;
   private wheel = new WheelGesture();
+  private lastPointer?: Vec2;
   private theme: PlanTheme = 'cad';
   private c = THEMES.cad;
   private hatch?: CanvasPattern | string;
@@ -130,7 +132,7 @@ export class PlanView {
 
   /** Runs a click at a plan point through the active tool, as if it happened on the 2D canvas. */
   clickAt(world: Vec2, shift: boolean): void {
-    this.applyResult(handleClick(this.state, this.store.project, world, { shift }));
+    this.click(world, shift);
   }
 
   select(selected: Selection | undefined): void {
@@ -150,23 +152,44 @@ export class PlanView {
     this.draw();
   }
 
+  private click(world: Vec2, shift: boolean): void {
+    const { tool } = this.state;
+    const p = this.store.project;
+    if (tool === 'select') {
+      // picking only reaches what is visible; the selection still refers to the real drawing
+      const r = handleClick(this.state, visibleForPicking(p, this.layers), world, { shift });
+      this.setState(r.state);
+      return;
+    }
+    if ((tool === 'door' || tool === 'window') && !this.layers.walls) {
+      this.onMessage('Layer Dinding sedang disembunyikan. Tampilkan dulu untuk memasang pintu atau jendela.');
+      return;
+    }
+    this.applyResult(handleClick(this.state, p, world, { shift }));
+  }
+
   /** Zooms and centers so the whole drawing, its dimensions and the room schedule fit the canvas. */
   fit(): void {
     const p = this.store.project;
     const pts = [...p.walls.flatMap((w) => [w.a, w.b]), ...p.rooms.flatMap((r) => r.points), ...p.furniture.flatMap(footprint)];
     if (!pts.length) return;
     // room for the dimension lines around the walls
-    const pad = this.layers.dimensions && p.walls.length ? 1.2 : 0.3;
+    const pad = this.drawingPad(p);
     const min = { x: Math.min(...pts.map((q) => q.x)) - pad, y: Math.min(...pts.map((q) => q.y)) - pad };
     const max = { x: Math.max(...pts.map((q) => q.x)) + pad, y: Math.max(...pts.map((q) => q.y)) + pad };
-    // the schedule table keeps a fixed on-screen width to the right of the drawing
-    const table = this.layers.schedule && p.rooms.length ? SCHEDULE_WIDTH + 24 : 0;
+    // the schedule table keeps a fixed on-screen size, beside the drawing or (narrow panes) below it
+    const hasTable = this.layers.schedule && p.rooms.length > 0;
+    const tableW = hasTable && !this.scheduleBelow ? SCHEDULE_WIDTH + 12 : 0;
+    const tableH = hasTable && this.scheduleBelow ? this.scheduleHeight(p) + 12 : 0;
     const margin = 36;
     const { x: w, y: h } = this.size;
-    const zoom = Math.min((w - margin * 2 - table) / Math.max(max.x - min.x, 1), (h - margin * 2) / Math.max(max.y - min.y, 1));
+    const zoom = Math.min(
+      (w - margin * 2 - tableW) / Math.max(max.x - min.x, 1),
+      (h - margin * 2 - tableH) / Math.max(max.y - min.y, 1),
+    );
     this.zoom = Math.min(400, Math.max(10, zoom));
-    // shift left by half the table so drawing and table together are centered
-    this.center = { x: (min.x + max.x) / 2 + table / 2 / this.zoom, y: (min.y + max.y) / 2 };
+    // shift by half the table so drawing and table together are centered
+    this.center = { x: (min.x + max.x) / 2 + tableW / 2 / this.zoom, y: (min.y + max.y) / 2 + tableH / 2 / this.zoom };
     this.draw();
   }
 
@@ -210,9 +233,9 @@ export class PlanView {
       e.stopPropagation();
       if (e.key === 'Escape') this.hideLengthInput();
       if (e.key !== 'Enter') return;
-      const len = parseLength(input.value);
+      const len = parseDrawingLength(input.value);
       if (len === undefined) {
-        this.onMessage('Ukuran tidak valid. Contoh: 4.5 atau 450cm');
+        this.onMessage('Panjang tidak valid. Contoh: 4500 (mm), 4,5 (m) atau 450cm');
         return;
       }
       this.hideLengthInput();
@@ -247,7 +270,8 @@ export class PlanView {
 
   private applyLength(len: number): void {
     const last = this.state.draft.at(-1)!;
-    const toward = this.hover ?? { x: last.x + 1, y: last.y };
+    // aim where the pointer last was on the canvas, even after it left to type on the command line
+    const toward = this.hover ?? this.lastPointer ?? { x: last.x + 1, y: last.y };
     // typing usually happens with the hand off Shift, so near-straight lines count as straight
     const angle = Math.abs(Math.atan2(toward.y - last.y, toward.x - last.x)) % (Math.PI / 2);
     const nearAxis = Math.min(angle, Math.PI / 2 - angle) < (5 * Math.PI) / 180;
@@ -320,8 +344,9 @@ export class PlanView {
       const world = this.toWorld(this.eventPoint(e));
       if (this.state.tool === 'select') {
         const down = this.eventPoint(e);
-        const from = cornerAt(this.store.project, world, 10 / this.zoom);
-        const item = from ? undefined : furnitureAt(this.store.project, world);
+        const visible = visibleForPicking(this.store.project, this.layers);
+        const from = cornerAt(visible, world, 10 / this.zoom);
+        const item = from ? undefined : furnitureAt(visible, world);
         if (from || item) {
           c.setPointerCapture(e.pointerId);
           this.drag = item
@@ -334,7 +359,7 @@ export class PlanView {
         this.panning = { start: down, center: this.center, click: { world, shift: e.shiftKey } };
         return;
       }
-      this.applyResult(handleClick(this.state, this.store.project, world, { shift: e.shiftKey }));
+      this.click(world, e.shiftKey);
     });
 
     c.addEventListener('pointermove', (e) => {
@@ -348,6 +373,7 @@ export class PlanView {
       }
       this.shiftDown = e.shiftKey;
       this.hover = this.toWorld(s);
+      this.lastPointer = this.hover;
       this.onCursor(this.hover);
       if (this.drag && !this.drag.moved && dist(s, this.drag.down) > DRAG_THRESHOLD_PX) this.drag.moved = true;
       if (this.drag?.moved) {
@@ -361,7 +387,7 @@ export class PlanView {
       const pan = this.panning;
       this.panning = undefined;
       if (pan?.click && !pan.moved) {
-        this.applyResult(handleClick(this.state, this.store.project, pan.click.world, { shift: pan.click.shift }));
+        this.click(pan.click.world, pan.click.shift);
         return;
       }
       const drag = this.drag;
@@ -453,6 +479,10 @@ export class PlanView {
 
   setLayers(layers: LayerState): void {
     this.layers = layers;
+    // a selection on a layer that just got hidden can't stay selected
+    const sel = this.state.selected;
+    const hiddenBy = { wall: 'walls', opening: 'openings', room: 'rooms', furniture: 'furniture' } as const;
+    if (sel && !layers[hiddenBy[sel.kind]]) this.setState({ ...this.state, selected: undefined });
     this.draw();
   }
 
@@ -467,7 +497,7 @@ export class PlanView {
     if (L.rooms) for (const r of p.rooms) this.drawRoom(r, this.isSelected('room', r.id));
     if (L.furniture) for (const f of drawOrder(p.furniture)) if (!hangsFromCeiling(f.kind)) this.drawFurniture(f, false);
     if (L.walls) this.drawWalls(p);
-    if (L.openings) {
+    if (L.openings && L.walls) {
       for (const o of p.openings) {
         const wall = p.walls.find((x) => x.id === o.wallId);
         if (wall) this.drawOpening(wall, o, this.isSelected('opening', o.id));
@@ -648,8 +678,12 @@ export class PlanView {
     const fill = this.layers.hatch ? this.hatchPattern() : this.c.wallFill;
     for (const wall of p.walls) {
       this.polygonPath(this.wallOutline(wall));
-      ctx.fillStyle = this.isSelected('wall', wall.id) ? this.c.selectedFill : fill;
+      ctx.fillStyle = fill;
       ctx.fill();
+      if (this.isSelected('wall', wall.id)) {
+        ctx.fillStyle = this.c.selectedFill;
+        ctx.fill();
+      }
     }
   }
 
@@ -660,7 +694,8 @@ export class PlanView {
     const start = add(wall.a, scale(dir, o.offset - o.width / 2));
     const end = add(wall.a, scale(dir, o.offset + o.width / 2));
     // clear the wall where the opening is, then draw the jambs
-    this.polygonPath(this.wallCorners(start, end, wall.thickness + 0.02));
+    // the wall outline sticks out ~1.25 px past each face: clear a little more than that
+    this.polygonPath(this.wallCorners(start, end, wall.thickness + 4 / this.zoom));
     ctx.fillStyle = this.c.bg;
     ctx.fill();
     ctx.strokeStyle = this.c.wall;
@@ -729,12 +764,9 @@ export class PlanView {
   private drawSchedule(p: Project): void {
     const s = roomSchedule(p);
     if (!s.rows.length) return;
-    const xs = p.walls.flatMap((w) => [w.a.x, w.b.x]).concat(p.rooms.flatMap((r) => r.points.map((q) => q.x)));
-    const ys = p.walls.flatMap((w) => [w.a.y, w.b.y]).concat(p.rooms.flatMap((r) => r.points.map((q) => q.y)));
-    // the table sits to the right of the drawing, past the dimensions, at a fixed on-screen size
-    const at = this.toScreen({ x: Math.max(...xs) + 1.2, y: Math.min(...ys) - 0.6 });
+    const at = this.scheduleAt(p);
     const { ctx } = this;
-    const rowH = 20;
+    const rowH = SCHEDULE_ROW;
     const colW = [SCHEDULE_WIDTH - 70, 70];
     const width = colW[0] + colW[1];
     const rows = [...s.rows.map((r) => [r.name, `${r.area.toFixed(1)} m²`]), ['Total', `${s.total.toFixed(1)} m²`]];
@@ -766,6 +798,29 @@ export class PlanView {
       ctx.fillText(area, at.x + width - 6, y);
     });
     ctx.textBaseline = 'alphabetic';
+  }
+
+  /** Narrow panes get the room table under the drawing instead of beside it. */
+  private get scheduleBelow(): boolean {
+    return this.size.x < 700;
+  }
+
+  private scheduleHeight(p: Project): number {
+    return SCHEDULE_ROW * (p.rooms.length + 3);
+  }
+
+  /** Top-left corner of the room table on screen, just outside the drawing and its dimensions. */
+  private scheduleAt(p: Project): Vec2 {
+    const xs = p.walls.flatMap((w) => [w.a.x, w.b.x]).concat(p.rooms.flatMap((r) => r.points.map((q) => q.x)));
+    const ys = p.walls.flatMap((w) => [w.a.y, w.b.y]).concat(p.rooms.flatMap((r) => r.points.map((q) => q.y)));
+    const pad = this.drawingPad(p);
+    if (this.scheduleBelow) return add(this.toScreen({ x: Math.min(...xs) - pad, y: Math.max(...ys) + pad }), { x: 0, y: 12 });
+    return add(this.toScreen({ x: Math.max(...xs) + pad, y: Math.min(...ys) - pad }), { x: 12, y: 0 });
+  }
+
+  /** Room left around the drawing for dimension lines. */
+  private drawingPad(p: Project): number {
+    return this.layers.dimensions && p.walls.length ? 1.2 : 0.3;
   }
 
   private drawCompass(): void {
@@ -805,7 +860,7 @@ export class PlanView {
     ctx.textAlign = n.x > 0.5 ? 'left' : n.x < -0.5 ? 'right' : 'center';
     const gap = 12;
     const baseline = n.y > 0.5 ? 10 : n.y < -0.5 ? -2 : 4;
-    ctx.fillText(String(Math.round(dist(a, b) * 1000)), mid.x + n.x * gap, mid.y + n.y * gap + baseline);
+    ctx.fillText(`${Math.round(dist(a, b) * 1000)} mm`, mid.x + n.x * gap, mid.y + n.y * gap + baseline);
   }
 
   private drawCorners(p: Project): void {
@@ -886,7 +941,7 @@ export class PlanView {
 
 export function isTextField(t: EventTarget | null): boolean {
   return (
-    t instanceof HTMLInputElement ||
+    (t instanceof HTMLInputElement && t.type !== 'checkbox' && t.type !== 'radio') ||
     t instanceof HTMLTextAreaElement ||
     t instanceof HTMLSelectElement ||
     (t instanceof HTMLElement && t.closest('dialog') !== null)

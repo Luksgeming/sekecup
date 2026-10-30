@@ -184,6 +184,7 @@ const toolbar = createToolbar(toolbarEl, document.querySelector<HTMLElement>('#p
     { id: 'view-2d', label: '2D', title: 'Hanya denah', run: () => setViewMode('2d') },
     { id: 'view-both', label: '2D + 3D', title: 'Denah dan 3D', run: () => setViewMode('both') },
     { id: 'view-3d', label: '3D', title: 'Hanya 3D', run: () => setViewMode('3d') },
+    { id: 'panel', label: 'Panel', title: 'Tampilkan atau sembunyikan panel Layer & Properti', run: () => toggleSidebar() },
     {
       id: 'theme',
       label: 'Gaya: CAD',
@@ -203,6 +204,13 @@ const toolbar = createToolbar(toolbarEl, document.querySelector<HTMLElement>('#p
 ]);
 setViewMode('both');
 setTheme(readTheme());
+// small screens start with the side panel closed, so the drawing gets the room
+if (window.innerWidth <= 1100) toggleSidebar(false);
+
+function toggleSidebar(show = document.body.dataset.sidebar === 'hidden'): void {
+  document.body.dataset.sidebar = show ? 'shown' : 'hidden';
+  toolbar.setPressed('panel', show);
+}
 
 let toastTimer = 0;
 function toast(msg: string): void {
@@ -263,7 +271,11 @@ function setTheme(theme: PlanTheme): void {
   }
 }
 
-const commandLine = createCommandLine(document.querySelector<HTMLFormElement>('#command')!, (cmd) => {
+const commandLine = createCommandLine(document.querySelector<HTMLFormElement>('#command')!, {
+  // an empty Enter finishes the current command, as in CAD; Esc cancels it
+  finish: () => plan.key(plan.toolState.tool === 'room' ? 'Enter' : 'Escape'),
+  cancel: () => plan.key('Escape'),
+}, (cmd) => {
   if (cmd.kind === 'tool') chooseTool(cmd.tool);
   else if (cmd.kind === 'action') {
     if (cmd.action === 'zoom') plan.fit();
@@ -271,7 +283,8 @@ const commandLine = createCommandLine(document.querySelector<HTMLFormElement>('#
     else redo();
   } else if (cmd.kind === 'length') {
     if (!plan.typeLength(cmd.meters)) toast('Mulai garis dulu: pilih DINDING atau RUANG lalu klik titik awal.');
-  } else toast(`Perintah tidak dikenal: ${cmd.text}. Contoh: DINDING, PINTU, JENDELA, RUANG, ZOOM, 4500.`);
+  } else if (/^[\d.,]+$/.test(cmd.text)) toast('Panjang harus lebih dari 0.');
+  else toast(`Perintah tidak dikenal: ${cmd.text}. Contoh: DINDING, PINTU, JENDELA, RUANG, ZOOM, 4500.`);
 });
 
 plan.onCursor = (at) => {
@@ -325,7 +338,7 @@ function showStorageBanner(): void {
   const banner = document.createElement('div');
   banner.id = 'banner';
   banner.textContent = 'Tidak tersimpan otomatis di perangkat ini. Gunakan "Simpan File" agar gambar tidak hilang.';
-  document.body.insertBefore(banner, document.querySelector('#views'));
+  document.body.insertBefore(banner, document.querySelector('#workspace'));
 }
 
 startAutosave(store, undefined, { onWriteError: showStorageBanner }).then(({ ok, flush, dropped }) => {

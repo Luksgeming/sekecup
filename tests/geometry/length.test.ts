@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseLength, pointAtLength } from '../../src/geometry/length';
+import { parseDrawingLength, parseLength, pointAtLength } from '../../src/geometry/length';
 
 describe('parseLength', () => {
   it.each([
@@ -31,5 +31,23 @@ describe('pointAtLength', () => {
 
   it('defaults to the +x direction when toward equals from', () => {
     expect(pointAtLength({ x: 1, y: 1 }, { x: 1, y: 1 }, 2)).toEqual({ x: 3, y: 1 });
+  });
+});
+
+describe('parseDrawingLength (canvas box and command line)', () => {
+  it.each([
+    ['4500', 4.5],
+    ['99', 0.099],
+    ['4,5', 4.5],
+    ['4.5', 4.5],
+    ['450cm', 4.5],
+    ['3200mm', 3.2],
+    ['2m', 2],
+  ])('reads %s as %d m: whole numbers are millimeters, decimals are meters', (text, m) => {
+    expect(parseDrawingLength(text)).toBeCloseTo(m);
+  });
+
+  it.each(['0', '', 'abc', '-5'])('rejects %j', (text) => {
+    expect(parseDrawingLength(text)).toBeUndefined();
   });
 });

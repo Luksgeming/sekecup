@@ -11,6 +11,20 @@ export const LAYERS = [
 export type LayerId = (typeof LAYERS)[number]['id'];
 export type LayerState = Record<LayerId, boolean>;
 
+import type { Project } from '../model/types';
+
+/** The drawing as far as clicking is concerned: whatever sits on a hidden layer can't be picked. */
+export function visibleForPicking(p: Project, layers: LayerState): Project {
+  if (layers.walls && layers.openings && layers.rooms && layers.furniture) return p;
+  return {
+    ...p,
+    walls: layers.walls ? p.walls : [],
+    openings: layers.walls && layers.openings ? p.openings : [],
+    rooms: layers.rooms ? p.rooms : [],
+    furniture: layers.furniture ? p.furniture : [],
+  };
+}
+
 type KeyStore = Pick<Storage, 'getItem' | 'setItem'>;
 const KEY = 'rea:layers';
 

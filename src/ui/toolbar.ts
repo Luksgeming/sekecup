@@ -14,7 +14,7 @@ const TOOLS: { tool: ToolName; label: string; key: string; group: string }[] = [
 /** What the command line asks for while each tool is active, CAD style. */
 export const TOOL_PROMPTS: Record<ToolName, string> = {
   select: 'PILIH  Klik objek, seret sudut/furnitur:',
-  wall: 'DINDING  Klik titik, atau ketik panjang (mm):',
+  wall: 'DINDING  Klik titik, atau ketik panjang (4500 = mm, 4,5 = m):',
   door: 'PINTU  Klik dinding:',
   window: 'JENDELA  Klik dinding:',
   room: 'RUANG  Klik sudut, atau ketik panjang sisi:',
@@ -23,7 +23,7 @@ export const TOOL_PROMPTS: Record<ToolName, string> = {
 
 export const TOOL_HINTS: Record<ToolName, string> = {
   select: 'Klik untuk memilih, Delete untuk menghapus. Seret sudut atau furnitur untuk memindah, R untuk memutar.',
-  wall: 'Klik titik demi titik untuk menggambar dinding. Ketik angka (mis. 4.5) untuk panjang pasti. Shift = lurus. Esc = selesai.',
+  wall: 'Klik titik demi titik untuk menggambar dinding. Ketik panjang: 4500 (mm) atau 4,5 (m). Shift = lurus. Esc = selesai.',
   door: 'Klik di dinding untuk memasang pintu.',
   window: 'Klik di dinding untuk memasang jendela.',
   room: 'Klik sudut-sudut ruangan, atau ketik panjang sisi. Klik titik awal atau Enter untuk selesai.',
