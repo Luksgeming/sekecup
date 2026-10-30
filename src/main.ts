@@ -5,6 +5,8 @@ import { PlanView } from './plan/PlanView';
 import { View3D } from './view3d/View3D';
 import { startAutosave } from './storage/autosave';
 import { parseProject, PROJECT_EXTENSION, serializeProject } from './io/projectFile';
+import { projectToDxf } from './io/dxf';
+import { exportGlb } from './io/glb';
 import { downloadBlob, pickFile, safeFilename } from './io/download';
 import { createToolbar, TOOL_HINTS, toolForKey } from './ui/toolbar';
 
@@ -43,6 +45,19 @@ function saveProjectFile(): void {
   downloadBlob(new Blob([serializeProject(p)], { type: 'application/json' }), safeFilename(p.name) + PROJECT_EXTENSION);
 }
 
+function exportDxf(): void {
+  const p = store.project;
+  downloadBlob(new Blob([projectToDxf(p)], { type: 'application/dxf' }), `${safeFilename(p.name)}.dxf`);
+}
+
+async function exportModel(): Promise<void> {
+  try {
+    downloadBlob(await exportGlb(view3d.house3d), `${safeFilename(store.project.name)}.glb`);
+  } catch {
+    toast('Gagal export model 3D');
+  }
+}
+
 function newProject(): void {
   if (store.project.walls.length && !window.confirm('Mulai gambar baru? Gambar sekarang akan diganti.')) return;
   store.load(emptyProject());
@@ -53,6 +68,10 @@ const toolbar = createToolbar(toolbarEl, (t) => plan.setTool(t), [
     { id: 'new', label: 'Baru', title: 'Gambar baru', run: newProject },
     { id: 'open', label: 'Buka', title: 'Buka file .rea.json', run: () => void openProjectFile() },
     { id: 'save', label: 'Simpan File', title: 'Unduh file .rea.json', run: saveProjectFile },
+  ],
+  [
+    { id: 'dxf', label: 'Export DXF', title: 'Denah 2D untuk AutoCAD', run: exportDxf },
+    { id: 'glb', label: 'Export 3D', title: 'Model .glb untuk SketchUp/Blender', run: () => void exportModel() },
   ],
   [
     { id: 'undo', label: 'Undo', title: 'Undo (Ctrl/Cmd+Z)', run: () => store.undo() },
