@@ -11,7 +11,7 @@ const TOOLS: { tool: ToolName; label: string; key: string }[] = [
 ];
 
 export const TOOL_HINTS: Record<ToolName, string> = {
-  select: 'Klik untuk memilih. Delete untuk menghapus.',
+  select: 'Klik untuk memilih, Delete untuk menghapus. Seret titik sudut untuk mengubah bentuk.',
   wall: 'Klik titik demi titik untuk menggambar dinding. Ketik angka (mis. 4.5) untuk panjang pasti. Shift = lurus. Esc = selesai.',
   door: 'Klik di dinding untuk memasang pintu.',
   window: 'Klik di dinding untuk memasang jendela.',

@@ -116,3 +116,54 @@ export function renameRoom(p: Project, id: string, name: string): Project | Fail
   if (trimmed === room.name) return p;
   return { ...p, rooms: p.rooms.map((r) => (r.id === id ? { ...r, name: trimmed } : r)) };
 }
+
+const CORNER_EPS = 0.001;
+const atCorner = (v: Vec2, c: Vec2) => dist(v, c) <= CORNER_EPS;
+
+export function cornerAt(p: Project, at: Vec2, radius = 0.2): Vec2 | undefined {
+  let best: Vec2 | undefined;
+  let bestDist = radius;
+  for (const w of p.walls) {
+    for (const end of [w.a, w.b]) {
+      const d = dist(end, at);
+      if (d <= bestDist) {
+        best = end;
+        bestDist = d;
+      }
+    }
+  }
+  return best;
+}
+
+/** Moves every wall end (and room point) sitting at `from` to `to`, keeping openings measured from the fixed end. */
+export function moveCorner(p: Project, from: Vec2, to: Vec2): Project | Failure {
+  const touched = p.walls.filter((w) => atCorner(w.a, from) || atCorner(w.b, from));
+  if (!touched.length || dist(from, to) < 1e-9) return p;
+
+  const walls = p.walls.map((w) => {
+    if (!touched.includes(w)) return w;
+    return { ...w, a: atCorner(w.a, from) ? to : w.a, b: atCorner(w.b, from) ? to : w.b };
+  });
+
+  const openings = p.openings.map((o) => {
+    const old = p.walls.find((w) => w.id === o.wallId)!;
+    if (!touched.includes(old) || !atCorner(old.a, from)) return o;
+    // point a moved: keep the distance from the fixed end b
+    const next = walls.find((w) => w.id === o.wallId)!;
+    return { ...o, offset: dist(next.a, next.b) - (dist(old.a, old.b) - o.offset) };
+  });
+
+  for (const w of walls) {
+    if (!touched.some((t) => t.id === w.id)) continue;
+    if (dist(w.a, w.b) < MIN_WALL_LENGTH) return { error: 'Dinding jadi terlalu pendek' };
+    const own = openings.filter((o) => o.wallId === w.id);
+    for (const o of own) {
+      if (validateOpening(w, o, own.filter((x) => x.id !== o.id))) return { error: 'Pintu/jendela jadi tidak muat' };
+    }
+  }
+
+  const rooms = p.rooms.map((r) =>
+    r.points.some((pt) => atCorner(pt, from)) ? { ...r, points: r.points.map((pt) => (atCorner(pt, from) ? to : pt)) } : r,
+  );
+  return { ...p, walls, openings, rooms };
+}

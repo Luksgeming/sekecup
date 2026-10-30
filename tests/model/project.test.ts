@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { emptyProject, addWall, removeWall, addOpening, addRoom, removeOpening, removeRoom, isEmptyProject, updateWall, updateOpening, renameRoom } from '../../src/model/project';
+import { emptyProject, addWall, removeWall, addOpening, addRoom, removeOpening, removeRoom, isEmptyProject, updateWall, updateOpening, renameRoom, moveCorner, cornerAt } from '../../src/model/project';
 import type { Project } from '../../src/model/types';
 
 function withWall(): Project {
@@ -167,5 +167,53 @@ describe('renameRoom', () => {
   it('returns the same project for the same name', () => {
     const p = room();
     expect(renameRoom(p, p.rooms[0].id, 'Kamar')).toBe(p);
+  });
+});
+
+describe('moveCorner', () => {
+  const corner = () => {
+    let p = addWall(emptyProject(), { x: 0, y: 0 }, { x: 4, y: 0 });
+    p = addWall(p, { x: 4, y: 0 }, { x: 4, y: 3 });
+    return p;
+  };
+
+  it('moves every wall end at that corner', () => {
+    const q = moveCorner(corner(), { x: 4, y: 0 }, { x: 5, y: 0 }) as Project;
+    expect(q.walls[0].b).toEqual({ x: 5, y: 0 });
+    expect(q.walls[1].a).toEqual({ x: 5, y: 0 });
+  });
+
+  it('rejects a move that collapses a wall to zero length', () => {
+    expect(moveCorner(corner(), { x: 4, y: 0 }, { x: 0, y: 0 })).toHaveProperty('error');
+  });
+
+  it('rejects a move that leaves a door without room', () => {
+    const p = door(corner(), 2) as Project;
+    expect(moveCorner(p, { x: 4, y: 0 }, { x: 2, y: 0 })).toHaveProperty('error');
+  });
+
+  it('keeps openings at the same distance from the fixed end', () => {
+    const p = door(corner(), 2) as Project;
+    const q = moveCorner(p, { x: 4, y: 0 }, { x: 6, y: 0 }) as Project;
+    expect(q.openings[0].offset).toBe(2);
+  });
+
+  it('moves room points sitting on that corner', () => {
+    const p = addRoom(corner(), 'Kamar', [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }]) as Project;
+    const q = moveCorner(p, { x: 4, y: 0 }, { x: 5, y: 0 }) as Project;
+    expect(q.rooms[0].points[1]).toEqual({ x: 5, y: 0 });
+  });
+
+  it('returns the same project when nothing is at that point', () => {
+    const p = corner();
+    expect(moveCorner(p, { x: 9, y: 9 }, { x: 1, y: 1 })).toBe(p);
+  });
+});
+
+describe('cornerAt', () => {
+  it('finds a wall end near the point', () => {
+    const p = addWall(emptyProject(), { x: 0, y: 0 }, { x: 4, y: 0 });
+    expect(cornerAt(p, { x: 3.9, y: 0.1 })).toEqual({ x: 4, y: 0 });
+    expect(cornerAt(p, { x: 2, y: 0 })).toBeUndefined();
   });
 });

@@ -3,7 +3,7 @@ import type { Opening, Project, Vec2, Wall } from '../model/types';
 import { polygonArea } from '../geometry/polygon';
 import { snapPoint } from '../geometry/snap';
 import { add, dist, normalize, scale, sub } from '../geometry/vec';
-import { addRoom } from '../model/project';
+import { addRoom, cornerAt, moveCorner } from '../model/project';
 import { askText } from '../ui/dialog';
 import { parseLength } from '../geometry/length';
 import { handleClick, handleKey, handleLengthInput, initialToolState, nearestWall, reconcile, type ToolName, type ToolResult, type ToolState } from './tools';
@@ -31,6 +31,7 @@ export class PlanView {
   private panning?: { start: Vec2; center: Vec2 };
   private spaceDown = false;
   private lengthInput?: HTMLInputElement;
+  private drag?: { from: Vec2; preview?: Project };
   private shiftDown = false;
 
   onMessage: (msg: string) => void = () => {};
@@ -195,6 +196,14 @@ export class PlanView {
       }
       if (e.button !== 0) return;
       const world = this.toWorld(this.eventPoint(e));
+      if (this.state.tool === 'select') {
+        const from = cornerAt(this.store.project, world, 10 / this.zoom);
+        if (from) {
+          c.setPointerCapture(e.pointerId);
+          this.drag = { from };
+          return;
+        }
+      }
       this.applyResult(handleClick(this.state, this.store.project, world, { shift: e.shiftKey }));
     });
 
@@ -205,10 +214,22 @@ export class PlanView {
       }
       this.shiftDown = e.shiftKey;
       this.hover = this.toWorld(s);
+      if (this.drag) {
+        const r = moveCorner(this.store.project, this.drag.from, this.dragTarget());
+        this.drag.preview = 'error' in r ? undefined : r;
+      }
       this.draw();
     });
 
-    c.addEventListener('pointerup', () => (this.panning = undefined));
+    c.addEventListener('pointerup', () => {
+      this.panning = undefined;
+      if (!this.drag) return;
+      const r = moveCorner(this.store.project, this.drag.from, this.dragTarget());
+      this.drag = undefined;
+      if ('error' in r) this.onMessage(r.error);
+      else this.store.apply(r);
+      this.draw();
+    });
     c.addEventListener('pointerleave', () => {
       this.hover = undefined;
       this.draw();
@@ -238,6 +259,13 @@ export class PlanView {
     });
   }
 
+  private dragTarget(): Vec2 {
+    const { from } = this.drag!;
+    // snap to other corners, never to the walls being dragged
+    const walls = this.store.project.walls.filter((w) => dist(w.a, from) > 0.001 && dist(w.b, from) > 0.001);
+    return snapPoint(this.hover ?? from, { walls, from, ortho: this.shiftDown });
+  }
+
   private snappedHover(): Vec2 | undefined {
     if (!this.hover) return undefined;
     if (this.state.tool !== 'wall' && this.state.tool !== 'room') return this.hover;
@@ -247,7 +275,7 @@ export class PlanView {
   draw(): void {
     const { ctx } = this;
     const { x: w, y: h } = this.size;
-    const p = this.store.project;
+    const p = this.drag?.preview ?? this.store.project;
     ctx.fillStyle = COLORS.bg;
     ctx.fillRect(0, 0, w, h);
     this.drawGrid();
@@ -386,8 +414,29 @@ export class PlanView {
     ctx.fillText(formatLength(dist(a, b)), mid.x + n.x * 16, mid.y + n.y * 16 + 4);
   }
 
+  private drawCorners(p: Project): void {
+    const { ctx } = this;
+    const seen = new Set<string>();
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = COLORS.selected;
+    ctx.lineWidth = 1.5;
+    for (const w of p.walls) {
+      for (const end of [w.a, w.b]) {
+        const key = `${end.x.toFixed(3)},${end.y.toFixed(3)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const s = this.toScreen(end);
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+  }
+
   private drawDraft(p: Project): void {
     const { ctx } = this;
+    if (this.state.tool === 'select') this.drawCorners(p);
     const hover = this.snappedHover();
     const { tool, draft } = this.state;
 
