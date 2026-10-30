@@ -34,7 +34,8 @@ export function furnitureAt(p: Project, at: Vec2): Furniture | undefined {
   return best;
 }
 
-/** Drawing order for the plan: rugs lie under everything else. */
+/** Drawing order for the plan: bigger pieces first, so a plant on a table stays visible. */
 export function drawOrder(items: Furniture[]): Furniture[] {
-  return [...items.filter((f) => f.kind === 'karpet'), ...items.filter((f) => f.kind !== 'karpet')];
+  const area = (f: Furniture) => FURNITURE[f.kind].size.w * FURNITURE[f.kind].size.d;
+  return [...items].sort((a, b) => area(b) - area(a));
 }

@@ -25,6 +25,7 @@ const COLORS = {
   door: '#8a5a2b',
   window: '#3b82c4',
   label: '#6b6658',
+  furniture: '#e4dfd4',
 };
 
 export class PlanView {
@@ -84,6 +85,13 @@ export class PlanView {
 
   select(selected: Selection | undefined): void {
     this.setState({ ...this.state, tool: 'select', placing: undefined, draft: [], selected });
+  }
+
+  /** Back to the starting view: 60 px per meter, looking at the first few meters. */
+  resetView(): void {
+    this.center = { x: 4, y: 3 };
+    this.zoom = 60;
+    this.draw();
   }
 
   /** Zooms and centers so the whole drawing fits the canvas. */
@@ -445,8 +453,8 @@ export class PlanView {
     const { ctx } = this;
     const corners = footprint(f);
     this.polygonPath(corners);
-    ctx.fillStyle = f.color;
-    ctx.globalAlpha = ghost ? 0.4 : f.kind === 'karpet' ? 0.5 : 0.85;
+    ctx.fillStyle = COLORS.furniture;
+    ctx.globalAlpha = ghost ? 0.4 : 0.9;
     ctx.fill();
     ctx.globalAlpha = 1;
     ctx.strokeStyle = ghost ? COLORS.draft : selected ? COLORS.selected : 'rgba(43, 42, 39, 0.75)';
@@ -462,12 +470,16 @@ export class PlanView {
     ctx.stroke();
 
     const { w, d } = FURNITURE[f.kind].size;
+    const flat = f.rotation % 180 === 90 ? d : w; // on-screen width of the piece
     if (Math.min(w, d) * this.zoom < 28) return;
     const c = this.toScreen(f);
     ctx.fillStyle = '#2b2a27';
     ctx.font = '10px system-ui, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(FURNITURE[f.kind].label, c.x, c.y + 3);
+    // only label pieces wide enough to hold their name
+    const label = FURNITURE[f.kind].label;
+    if (ctx.measureText(label).width > flat * this.zoom - 6) return;
+    ctx.fillText(label, c.x, c.y + 3);
   }
 
   private drawRoomLabel(name: string, points: Vec2[]): void {
@@ -575,7 +587,7 @@ export class PlanView {
     if (this.state.tool === 'furniture' && this.state.placing && this.hover) {
       // ghost of the piece under the cursor before it is placed
       const kind = this.state.placing;
-      this.drawFurniture({ id: '', kind, x: this.hover.x, y: this.hover.y, rotation: 0, color: FURNITURE[kind].color }, false, true);
+      this.drawFurniture({ id: '', kind, x: this.hover.x, y: this.hover.y, rotation: 0, color: '' }, false, true);
     }
     const hover = this.snappedHover();
     const { tool, draft } = this.state;

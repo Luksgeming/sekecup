@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseProject, serializeProject } from '../../src/io/projectFile';
+import { parseProject, parseProjectWithNotes, serializeProject } from '../../src/io/projectFile';
 import { addFurniture, addOpening, addRoom, addWall, emptyProject } from '../../src/model/project';
 import { DOOR_DEFAULTS, type Project } from '../../src/model/types';
 
@@ -127,5 +127,23 @@ describe('version 2 hardening', () => {
     const p = addFurniture(sample(), 'sofa-3', { x: 1, y: 1 });
     const odd = { ...p, furniture: [{ ...p.furniture[0], rotation: -90 }] };
     expect((parseProject(JSON.stringify(odd)) as Project).furniture[0].rotation).toBe(270);
+  });
+});
+
+describe('furniture removed from the catalog', () => {
+  it('drops pieces whose kind no longer exists and counts them', () => {
+    const p = addFurniture(sample(), 'sofa-3', { x: 1, y: 1 });
+    const old = { ...p, furniture: [...p.furniture, { ...p.furniture[0], id: 'k1', kind: 'kulkas' }, { ...p.furniture[0], id: 'k2', kind: 'karpet' }] };
+    const r = parseProjectWithNotes(JSON.stringify(old));
+    expect(r).not.toHaveProperty('error');
+    const { project, dropped } = r as { project: Project; dropped: number };
+    expect(project.furniture.map((f) => f.kind)).toEqual(['sofa-3']);
+    expect(dropped).toBe(2);
+  });
+
+  it('still rejects a kind that never existed', () => {
+    const p = addFurniture(sample(), 'sofa-3', { x: 1, y: 1 });
+    const broken = { ...p, furniture: [{ ...p.furniture[0], kind: 'jacuzzi' }] };
+    expect(parseProjectWithNotes(JSON.stringify(broken))).toHaveProperty('error');
   });
 });

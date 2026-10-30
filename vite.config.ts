@@ -27,6 +27,14 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        // furniture models are big, so they are cached the first time they are used instead of up front
+        runtimeCaching: [
+          {
+            urlPattern: /\/models\/.*\.glb$/,
+            handler: 'CacheFirst',
+            options: { cacheName: 'rea-models', expiration: { maxEntries: 60 } },
+          },
+        ],
       },
     }),
   ],

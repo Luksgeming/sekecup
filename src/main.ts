@@ -11,7 +11,7 @@ import { createAdvisor } from './ui/advisor';
 import { applyRecommendation } from './model/project';
 import { View3D } from './view3d/View3D';
 import { startAutosave } from './storage/autosave';
-import { parseProject, PROJECT_EXTENSION, serializeProject } from './io/projectFile';
+import { parseProjectWithNotes, PROJECT_EXTENSION, serializeProject } from './io/projectFile';
 import { projectToDxf } from './io/dxf';
 import { exportGlb } from './io/glb';
 import { pickFile, safeFilename, saveFile } from './io/download';
@@ -46,15 +46,20 @@ async function openProjectFile(): Promise<void> {
   if (!(await okToReplace())) return;
   const file = await pickFile('.json,application/json');
   if (!file) return;
-  const p = parseProject(await file.text());
-  if ('error' in p) {
-    toast(`Gagal membuka file: ${p.error}`);
+  const r = parseProjectWithNotes(await file.text());
+  if ('error' in r) {
+    toast(`Gagal membuka file: ${r.error}`);
     return;
   }
+  const p = r.project;
   store.load(p);
   plan.fit();
   view3d.fit();
-  toast(`Dibuka: ${p.name}`);
+  toast(
+    r.dropped
+      ? `Dibuka: ${p.name}. ${r.dropped} furnitur lama dihapus karena tidak ada lagi di katalog.`
+      : `Dibuka: ${p.name}`,
+  );
 }
 
 // the shareable preview build runs in a sandbox that blocks downloads and service workers
@@ -85,7 +90,7 @@ function exportDxf(): void {
 async function exportModel(): Promise<void> {
   let blob: Blob;
   try {
-    blob = await exportGlb(view3d.exportModel());
+    blob = await exportGlb(await view3d.exportModel());
   } catch {
     toast('Gagal export model 3D');
     return;
@@ -96,6 +101,7 @@ async function exportModel(): Promise<void> {
 async function newProject(): Promise<void> {
   if (!(await okToReplace())) return;
   store.load(emptyProject());
+  plan.resetView();
 }
 
 function undo(): void {

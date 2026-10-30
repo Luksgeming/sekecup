@@ -16,14 +16,14 @@ const extent = (pts: { x: number; y: number }[]) => ({
 describe('footprint', () => {
   it('is the catalog size around the center', () => {
     const e = extent(footprint(bed().furniture[0]));
-    expect(e.w).toBeCloseTo(1.6);
-    expect(e.d).toBeCloseTo(2.0);
+    expect(e.w).toBeCloseTo(1.49);
+    expect(e.d).toBeCloseTo(2.04);
   });
 
   it('swaps width and depth at 90 degrees', () => {
     const e = extent(footprint(bed(90).furniture[0]));
-    expect(e.w).toBeCloseTo(2.0);
-    expect(e.d).toBeCloseTo(1.6);
+    expect(e.w).toBeCloseTo(2.04);
+    expect(e.d).toBeCloseTo(1.49);
   });
 });
 
@@ -39,17 +39,17 @@ describe('furnitureAt', () => {
     expect(furnitureAt(p, { x: 5.9, y: 5 })?.id).toBe(p.furniture[0].id);
   });
 
-  it('prefers the item on top (last added)', () => {
-    let p = addFurniture(emptyProject(), 'karpet', { x: 0, y: 0 });
-    p = addFurniture(p, 'meja-tamu', { x: 0, y: 0 });
+  it('prefers the smaller piece where two overlap', () => {
+    let p = addFurniture(emptyProject(), 'meja-tamu', { x: 0, y: 0 });
+    p = addFurniture(p, 'meja-tamu-bundar', { x: 0, y: 0 });
     expect(furnitureAt(p, { x: 0, y: 0 })?.kind).toBe('meja-tamu');
   });
 });
 
-describe('furnitureAt with a rug', () => {
-  it('picks the sofa standing on a rug placed after it', () => {
-    let p = addFurniture(emptyProject(), 'sofa-3', { x: 0, y: 0 });
-    p = addFurniture(p, 'karpet', { x: 0, y: 0.3 });
-    expect(furnitureAt(p, { x: 0.2, y: 0 })?.kind).toBe('sofa-3');
+describe('furnitureAt with overlapping pieces', () => {
+  it('picks the plant standing on a big table placed before it', () => {
+    let p = addFurniture(emptyProject(), 'tanaman-daun', { x: 0, y: 0 });
+    p = addFurniture(p, 'meja-kerja', { x: 0, y: 0 });
+    expect(furnitureAt(p, { x: 0.1, y: 0 })?.kind).toBe('tanaman-daun');
   });
 });

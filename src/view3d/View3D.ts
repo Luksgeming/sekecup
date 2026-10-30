@@ -5,6 +5,7 @@ import type { Store } from '../model/store';
 import type { Vec2 } from '../model/types';
 import { buildMeshes, disposeGroup } from './buildMeshes';
 import { floorPoint } from './floorPoint';
+import { loadModels, onModelLoaded } from '../interior/models';
 
 const LOW_WALL_HEIGHT = 1.2;
 const DRAG_THRESHOLD_PX = 4;
@@ -87,7 +88,13 @@ export class View3D {
     this.scene.add(this.house);
     this.fit();
 
-    this.unsubscribe = store.subscribe(() => this.rebuild());
+    const offStore = store.subscribe(() => this.rebuild());
+    // a furniture model finishing its download replaces its placeholder box
+    const offModels = onModelLoaded(() => this.rebuild());
+    this.unsubscribe = () => {
+      offStore();
+      offModels();
+    };
 
     // on-canvas controls: wall height toggle and a short how-to
     const bar = document.createElement('div');
@@ -108,8 +115,9 @@ export class View3D {
     this.resize();
   }
 
-  /** The house with full-height walls, for exporting. */
-  exportModel(): THREE.Group {
+  /** The house with full-height walls and every furniture model loaded, for exporting. */
+  async exportModel(): Promise<THREE.Group> {
+    await loadModels(this.store.project.furniture.map((f) => f.kind));
     return buildMeshes(this.store.project);
   }
 

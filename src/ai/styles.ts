@@ -20,7 +20,7 @@ const STYLES: Style[] = [
     summary: 'Ruangan terang dan bersih. Pertahankan permukaan polos dan sedikit barang.',
     palette: ['#f2efe8', '#d9d9d6', '#3f3f3d', '#b9a48a'],
     floor: 'beton',
-    furniture: ['sofa-3', 'meja-tamu', 'rak-tv', 'lampu-lantai'],
+    furniture: ['sofa-kulit', 'meja-tamu', 'rak-tv', 'tanaman'],
     tips: ['Pilih furnitur berkaki ramping agar lantai terlihat lapang.', 'Simpan barang di lemari tertutup, bukan rak terbuka.', 'Satu tanaman besar lebih rapi daripada banyak tanaman kecil.'],
   },
   {
@@ -29,8 +29,8 @@ const STYLES: Style[] = [
     summary: 'Terang, hangat, dan nyaman, dengan kayu muda dan tekstil lembut.',
     palette: ['#f2efe8', '#e8e2d6', '#b7c4a8', '#c9a77c', '#4a4a48'],
     floor: 'kayu',
-    furniture: ['sofa-3', 'karpet', 'meja-tamu', 'tanaman', 'lampu-lantai', 'rak-buku'],
-    tips: ['Pakai karpet bertekstur di area duduk.', 'Kayu warna muda (oak, pinus) untuk meja dan rak.', 'Tambahkan lampu hangat di sudut agar nyaman di malam hari.'],
+    furniture: ['sofa-3', 'kursi-berlengan', 'meja-tamu', 'tanaman', 'rak-buku'],
+    tips: ['Pakai tekstil bertekstur (bantal, selimut) di area duduk.', 'Kayu warna muda (oak, pinus) untuk meja dan rak.', 'Tambahkan lampu hangat di sudut agar nyaman di malam hari.'],
   },
   {
     name: 'Industrial',
@@ -38,7 +38,7 @@ const STYLES: Style[] = [
     summary: 'Nuansa gelap dengan beton, logam, dan kayu tua.',
     palette: ['#d9d9d6', '#3f3f3d', '#8b5e3c', '#a9a8a4'],
     floor: 'beton',
-    furniture: ['sofa-3', 'meja-kerja', 'kursi-kerja', 'rak-buku', 'lampu-lantai'],
+    furniture: ['sofa-kulit', 'meja-kerja', 'rak-besi', 'kursi-santai', 'lemari-laci'],
     tips: ['Dinding abu muda menyeimbangkan furnitur yang gelap.', 'Padukan logam hitam dengan kayu berserat kasar.', 'Lampu gantung atau lampu lantai berwarna kuning hangat.'],
   },
   {
@@ -47,7 +47,7 @@ const STYLES: Style[] = [
     summary: 'Tenang dan alami: warna tanah, kayu, dan bentuk rendah.',
     palette: ['#efe2c8', '#d9c9a8', '#8b6a4c', '#3f3f3d', '#b7c4a8'],
     floor: 'kayu',
-    furniture: ['kasur-double', 'nakas', 'meja-tamu', 'tanaman', 'karpet'],
+    furniture: ['kasur-double', 'nakas', 'meja-tamu', 'tanaman-daun', 'ottoman'],
     tips: ['Pilih furnitur rendah dan berbentuk sederhana.', 'Batasi palet ke 3–4 warna tanah.', 'Bahan alami: linen, rotan, kayu tanpa cat mengkilap.'],
   },
   {
@@ -56,7 +56,7 @@ const STYLES: Style[] = [
     summary: 'Segar dan rimbun, dengan tanaman, kayu, dan sirkulasi udara.',
     palette: ['#f2efe8', '#b7c4a8', '#5f8d4e', '#8b5e3c', '#efe2c8'],
     floor: 'kayu',
-    furniture: ['tanaman', 'kursi-santai', 'sofa-3', 'karpet', 'meja-tamu'],
+    furniture: ['tanaman', 'tanaman-daun', 'kursi-berlengan', 'sofa-3', 'meja-tamu-bundar'],
     tips: ['Kelompokkan beberapa tanaman dengan tinggi berbeda.', 'Dinding terang agar ruangan tetap sejuk.', 'Rotan dan kayu jati cocok untuk kursi dan meja.'],
   },
   {
@@ -65,8 +65,8 @@ const STYLES: Style[] = [
     summary: 'Hangat dan berkarakter, dengan kayu gelap dan warna tanah liat.',
     palette: ['#efe2c8', '#c9785a', '#8b5e3c', '#7d8b8c', '#f2efe8'],
     floor: 'kayu',
-    furniture: ['sofa-3', 'kursi-santai', 'meja-tamu', 'rak-buku', 'karpet', 'lampu-lantai'],
-    tips: ['Satu dinding aksen terakota sudah cukup kuat.', 'Kayu gelap untuk rak dan meja, kain polos untuk sofa.', 'Karpet bermotif menyatukan area duduk.'],
+    furniture: ['sofa-kulit', 'kursi-santai', 'meja-tamu-bundar', 'lemari', 'ottoman'],
+    tips: ['Satu dinding aksen terakota sudah cukup kuat.', 'Kayu gelap untuk rak dan meja, kain polos untuk sofa.', 'Kumpulkan sofa dan kursi mengelilingi satu meja agar area duduk terasa utuh.'],
   },
 ];
 

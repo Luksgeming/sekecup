@@ -1,6 +1,8 @@
 import { dist } from '../geometry/vec';
 import { polygonArea } from '../geometry/polygon';
-import { FURNITURE, isFloorMaterial, isHexColor } from '../interior/kinds';
+import { isFloorMaterial, isHexColor } from '../interior/kinds';
+
+const FURNITURE_COLOR = '#b9b2a3';
 import { ROOM_DEFAULTS, WALL_DEFAULTS, type Failure, type FloorMaterial, type FurnitureKind, type Opening, type Project, type Vec2, type Wall } from './types';
 
 const MIN_WALL_LENGTH = 0.01;
@@ -205,7 +207,8 @@ export function setRoomFloor(p: Project, id: string, floor: FloorMaterial): Proj
 }
 
 export function addFurniture(p: Project, kind: FurnitureKind, at: Vec2): Project {
-  const item = { id: newId(), kind, x: at.x, y: at.y, rotation: 0, color: FURNITURE[kind].color };
+  // realistic models keep their own textures; color is stored for older files only
+  const item = { id: newId(), kind, x: at.x, y: at.y, rotation: 0, color: FURNITURE_COLOR };
   return { ...p, furniture: [...p.furniture, item] };
 }
 

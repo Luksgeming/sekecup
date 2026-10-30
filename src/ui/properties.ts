@@ -16,8 +16,6 @@ type Field = {
 
 const m = (v: number) => `${v.toFixed(2)}`;
 
-const FURNITURE_PALETTE = ['#e8e2d6', '#a47551', '#8b5e3c', '#4a4a48', '#7d8b8c', '#c08a5b', '#b7c4a8', '#bfd3e0', '#c9785a', '#fafafa'];
-
 type View = {
   title: string;
   fields: Field[];
@@ -122,13 +120,6 @@ export function createPropertiesPanel(
           },
         ],
         extras: [
-          swatches(
-            'Warna',
-            FURNITURE_PALETTE.map((c) => ({ label: c, color: c })),
-            f.color,
-            (color) => apply((cur) => updateFurniture(cur, f.id, { color })),
-            true,
-          ),
           row,
         ],
         note: `${FURNITURE[f.kind].size.w} × ${FURNITURE[f.kind].size.d} m`,

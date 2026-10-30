@@ -47,8 +47,8 @@ describe('interior in 3D', () => {
     const items = ofKind(buildMeshes(p), 'furniture');
     expect(items).toHaveLength(1);
     const size = new THREE.Box3().setFromObject(items[0]).getSize(new THREE.Vector3());
-    expect(size.x).toBeCloseTo(2.0, 1);
-    expect(size.z).toBeCloseTo(1.6, 1);
+    expect(size.x).toBeCloseTo(2.04, 1);
+    expect(size.z).toBeCloseTo(1.49, 1);
     expect(items[0].position.x).toBe(3);
     expect(items[0].position.z).toBe(2);
   });
@@ -64,15 +64,27 @@ describe('interior in 3D', () => {
 describe('rotation direction', () => {
   it('turns the chair back to the same side as the 2D back edge', async () => {
     const { footprint } = await import('../../src/geometry/footprint');
+    const { registerModel } = await import('../../src/interior/models');
+    // a stand-in chair: a seat plus a tall back at -z, the back of every catalog model
+    const chairModel = new THREE.Group();
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(0.43, 0.45, 0.58));
+    seat.position.set(0, 0.225, 0);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(0.43, 0.97, 0.05));
+    back.position.set(0, 0.485, -0.265);
+    chairModel.add(seat, back);
+    registerModel('kursi-makan', chairModel);
+
     let p = addFurniture(emptyProject(), 'kursi-makan', { x: 0, y: 0 });
     p = updateFurniture(p, p.furniture[0].id, { rotation: 90 }) as Project;
     const [c0, c1] = footprint(p.furniture[0]);
     const backX2d = (c0.x + c1.x) / 2;
     const chair = ofKind(buildMeshes(p), 'furniture')[0];
     chair.updateMatrixWorld(true);
-    // the backrest is the only part above seat height
-    const back = chair.children.find((m) => new THREE.Box3().setFromObject(m).max.y > 0.6)!;
-    const backX3d = new THREE.Box3().setFromObject(back).getCenter(new THREE.Vector3()).x;
+    let backMesh: THREE.Object3D | undefined;
+    chair.traverse((o) => {
+      if (o instanceof THREE.Mesh && new THREE.Box3().setFromObject(o).max.y > 0.6) backMesh = o;
+    });
+    const backX3d = new THREE.Box3().setFromObject(backMesh!).getCenter(new THREE.Vector3()).x;
     expect(Math.sign(backX3d)).toBe(Math.sign(backX2d));
   });
 });
@@ -96,6 +108,6 @@ describe('low walls', () => {
   it('leaves furniture untouched', () => {
     const p = addFurniture(oneWall(), 'lemari', { x: 2, y: 1 });
     const item = ofKind(buildMeshes(p, { wallCut: 1.2 }), 'furniture')[0];
-    expect(new THREE.Box3().setFromObject(item).getSize(new THREE.Vector3()).y).toBeCloseTo(2.0, 1);
+    expect(new THREE.Box3().setFromObject(item).getSize(new THREE.Vector3()).y).toBeCloseTo(2.23, 1);
   });
 });

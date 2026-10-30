@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Project, Wall } from '../model/types';
 import { dist, normalize, sub } from '../geometry/vec';
 import { wallBoxes } from '../geometry/wallBoxes';
-import { buildFurniture } from '../interior/catalog';
+import { furnitureObject } from '../interior/models';
 import { floorMaterial } from '../interior/floorTextures';
 
 const GLASS = new THREE.MeshStandardMaterial({ color: 0x9cc8e8, transparent: true, opacity: 0.35, roughness: 0.1 });
@@ -57,7 +57,7 @@ export function buildMeshes(p: Project, { wallCut = Infinity }: BuildOptions = {
   }
 
   for (const f of p.furniture) {
-    const item = buildFurniture(f.kind, f.color);
+    const item = furnitureObject(f.kind);
     item.position.set(f.x, 0, f.y);
     // plan rotation is clockwise on screen (y down), which is -y in three.js
     item.rotation.y = -(f.rotation * Math.PI) / 180;
@@ -91,6 +91,6 @@ function placeOnWall(
 
 export function disposeGroup(group: THREE.Group): void {
   group.traverse((obj) => {
-    if (obj instanceof THREE.Mesh) obj.geometry.dispose();
+    if (obj instanceof THREE.Mesh && !obj.userData.shared) obj.geometry.dispose();
   });
 }

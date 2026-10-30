@@ -1,38 +1,44 @@
-// Furniture catalog data: sizes in meters (w = width along x, d = depth along y, h = height).
+// Furniture catalog. Every piece is a realistic CC0 model from Poly Haven (see
+// public/models/CREDITS.md). Sizes in meters, taken from the models themselves:
+// w = width along x, d = depth along y on the plan, h = height. `rotation` turns
+// the model (degrees) so its front faces +y on the plan.
 
-export type FurnitureCategory = 'Kamar' | 'Ruang tamu' | 'Makan & dapur' | 'Kamar mandi' | 'Lain-lain';
+export type FurnitureCategory = 'Kamar' | 'Ruang tamu' | 'Makan' | 'Kerja' | 'Tanaman';
 
 export type FurnitureSpec = {
   label: string;
   category: FurnitureCategory;
+  model: string;
+  rotation: number;
   size: { w: number; d: number; h: number };
-  color: string;
 };
 
 export const FURNITURE = {
-  'kasur-single': { label: 'Kasur single', category: 'Kamar', size: { w: 1.0, d: 2.0, h: 0.55 }, color: '#e8e2d6' },
-  'kasur-double': { label: 'Kasur double', category: 'Kamar', size: { w: 1.6, d: 2.0, h: 0.55 }, color: '#e8e2d6' },
-  lemari: { label: 'Lemari', category: 'Kamar', size: { w: 1.2, d: 0.6, h: 2.0 }, color: '#a47551' },
-  nakas: { label: 'Nakas', category: 'Kamar', size: { w: 0.45, d: 0.4, h: 0.5 }, color: '#a47551' },
-  'sofa-3': { label: 'Sofa 3 dudukan', category: 'Ruang tamu', size: { w: 2.0, d: 0.9, h: 0.8 }, color: '#7d8b8c' },
-  'kursi-santai': { label: 'Kursi santai', category: 'Ruang tamu', size: { w: 0.8, d: 0.8, h: 0.8 }, color: '#c08a5b' },
-  'meja-tamu': { label: 'Meja tamu', category: 'Ruang tamu', size: { w: 1.0, d: 0.6, h: 0.42 }, color: '#8b5e3c' },
-  'rak-tv': { label: 'Rak TV', category: 'Ruang tamu', size: { w: 1.6, d: 0.4, h: 0.5 }, color: '#4a4a48' },
-  karpet: { label: 'Karpet', category: 'Ruang tamu', size: { w: 2.0, d: 1.4, h: 0.01 }, color: '#b9a48a' },
-  'meja-makan': { label: 'Meja makan', category: 'Makan & dapur', size: { w: 1.6, d: 0.9, h: 0.75 }, color: '#8b5e3c' },
-  'kursi-makan': { label: 'Kursi makan', category: 'Makan & dapur', size: { w: 0.45, d: 0.5, h: 0.9 }, color: '#8b5e3c' },
-  'kitchen-set': { label: 'Kitchen set', category: 'Makan & dapur', size: { w: 2.4, d: 0.6, h: 0.9 }, color: '#f4f1ea' },
-  kulkas: { label: 'Kulkas', category: 'Makan & dapur', size: { w: 0.7, d: 0.7, h: 1.8 }, color: '#d9dcdf' },
-  kloset: { label: 'Kloset', category: 'Kamar mandi', size: { w: 0.4, d: 0.7, h: 0.75 }, color: '#fafafa' },
-  wastafel: { label: 'Wastafel', category: 'Kamar mandi', size: { w: 0.6, d: 0.45, h: 0.85 }, color: '#fafafa' },
-  bathtub: { label: 'Bathtub', category: 'Kamar mandi', size: { w: 1.7, d: 0.75, h: 0.55 }, color: '#fafafa' },
-  shower: { label: 'Shower', category: 'Kamar mandi', size: { w: 0.9, d: 0.9, h: 2.0 }, color: '#cfe3ea' },
-  'meja-kerja': { label: 'Meja kerja', category: 'Lain-lain', size: { w: 1.2, d: 0.6, h: 0.75 }, color: '#c9a77c' },
-  'kursi-kerja': { label: 'Kursi kerja', category: 'Lain-lain', size: { w: 0.55, d: 0.55, h: 1.0 }, color: '#3d3d3d' },
-  'rak-buku': { label: 'Rak buku', category: 'Lain-lain', size: { w: 0.9, d: 0.3, h: 1.8 }, color: '#a47551' },
-  tanaman: { label: 'Tanaman', category: 'Lain-lain', size: { w: 0.4, d: 0.4, h: 1.1 }, color: '#5f8d4e' },
-  'lampu-lantai': { label: 'Lampu lantai', category: 'Lain-lain', size: { w: 0.35, d: 0.35, h: 1.6 }, color: '#d8c7a3' },
+  'kasur-double': { label: 'Kasur kayu klasik', category: 'Kamar', model: 'GothicBed_01', rotation: 0, size: { w: 1.49, d: 2.04, h: 1.53 } },
+  nakas: { label: 'Nakas', category: 'Kamar', model: 'side_table_01', rotation: 0, size: { w: 0.55, d: 0.45, h: 0.55 } },
+  lemari: { label: 'Lemari pajangan', category: 'Kamar', model: 'vintage_cabinet_01', rotation: 0, size: { w: 2.02, d: 0.67, h: 2.23 } },
+  'lemari-laci': { label: 'Lemari laci', category: 'Kamar', model: 'drawer_cabinet', rotation: 0, size: { w: 1.14, d: 0.49, h: 1.88 } },
+  'sofa-3': { label: 'Sofa klasik', category: 'Ruang tamu', model: 'Sofa_01', rotation: 0, size: { w: 1.57, d: 0.66, h: 0.8 } },
+  'sofa-kulit': { label: 'Sofa kulit', category: 'Ruang tamu', model: 'sofa_02', rotation: 180, size: { w: 1.81, d: 0.82, h: 0.71 } },
+  'kursi-santai': { label: 'Kursi santai', category: 'Ruang tamu', model: 'mid_century_lounge_chair', rotation: 0, size: { w: 1.01, d: 1.19, h: 1.17 } },
+  'kursi-berlengan': { label: 'Kursi berlengan', category: 'Ruang tamu', model: 'modern_arm_chair_01', rotation: 0, size: { w: 0.82, d: 0.99, h: 1.02 } },
+  ottoman: { label: 'Ottoman', category: 'Ruang tamu', model: 'Ottoman_01', rotation: 0, size: { w: 0.89, d: 0.62, h: 0.62 } },
+  'meja-tamu': { label: 'Meja tamu', category: 'Ruang tamu', model: 'modern_coffee_table_01', rotation: 90, size: { w: 1.2, d: 0.6, h: 0.39 } },
+  'meja-tamu-bundar': { label: 'Meja tamu bundar', category: 'Ruang tamu', model: 'coffee_table_round_01', rotation: 0, size: { w: 1.3, d: 1.3, h: 0.49 } },
+  'rak-tv': { label: 'Rak TV', category: 'Ruang tamu', model: 'modern_wooden_cabinet', rotation: 0, size: { w: 2.44, d: 0.52, h: 0.68 } },
+  'meja-makan': { label: 'Meja makan', category: 'Makan', model: 'wooden_table_02', rotation: 0, size: { w: 1.13, d: 0.71, h: 0.8 } },
+  'kursi-makan': { label: 'Kursi makan', category: 'Makan', model: 'dining_chair_02', rotation: 0, size: { w: 0.43, d: 0.58, h: 0.97 } },
+  'meja-kerja': { label: 'Meja kerja', category: 'Kerja', model: 'metal_office_desk', rotation: 0, size: { w: 2.0, d: 0.95, h: 0.79 } },
+  'rak-buku': { label: 'Rak pajang', category: 'Kerja', model: 'wooden_display_shelves_01', rotation: -90, size: { w: 1.08, d: 0.37, h: 1.56 } },
+  'rak-besi': { label: 'Rak besi', category: 'Kerja', model: 'steel_frame_shelves_01', rotation: 0, size: { w: 1.1, d: 0.5, h: 2.14 } },
+  tanaman: { label: 'Tanaman tinggi', category: 'Tanaman', model: 'potted_plant_01', rotation: 0, size: { w: 0.59, d: 0.63, h: 1.34 } },
+  'tanaman-daun': { label: 'Tanaman daun lebar', category: 'Tanaman', model: 'potted_plant_02', rotation: 0, size: { w: 0.7, d: 0.66, h: 0.84 } },
 } satisfies Record<string, FurnitureSpec>;
+
+/** Kinds from older versions that have no realistic model; files that use them drop those pieces. */
+export const REMOVED_KINDS = new Set([
+  'kasur-single', 'karpet', 'kitchen-set', 'kulkas', 'kloset', 'wastafel', 'bathtub', 'shower', 'kursi-kerja', 'lampu-lantai',
+]);
 
 export type FurnitureKind = keyof typeof FURNITURE;
 

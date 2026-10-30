@@ -67,6 +67,6 @@ describe('furniture in DXF', () => {
     const items = entities(projectToDxf(p)).filter((e) => e.layer === 'FURNITURE');
     expect(items.filter((e) => e.type === 'POLYLINE')).toHaveLength(1);
     expect(items.filter((e) => e.type === 'VERTEX')).toHaveLength(4);
-    expect(items.find((e) => e.type === 'TEXT')!.values.get('1')![0]).toBe('Kasur double');
+    expect(items.find((e) => e.type === 'TEXT')!.values.get('1')![0]).toBe('Kasur kayu klasik');
   });
 });

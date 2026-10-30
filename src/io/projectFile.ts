@@ -1,5 +1,5 @@
 import { validateOpening } from '../model/project';
-import { isFloorMaterial, isFurnitureKind, isHexColor } from '../interior/kinds';
+import { isFloorMaterial, isFurnitureKind, isHexColor, REMOVED_KINDS } from '../interior/kinds';
 import { ROOM_DEFAULTS, WALL_DEFAULTS, type Failure, type Furniture, type Opening, type Project, type Room, type Vec2, type Wall } from '../model/types';
 
 export const PROJECT_EXTENSION = '.rea.json';
@@ -97,6 +97,12 @@ function room(v: unknown): Room {
 }
 
 export function parseProject(text: string): Project | Failure {
+  const r = parseProjectWithNotes(text);
+  return 'error' in r ? r : r.project;
+}
+
+/** Like parseProject, and also says how many pieces were dropped because their kind left the catalog. */
+export function parseProjectWithNotes(text: string): { project: Project; dropped: number } | Failure {
   let data: unknown;
   try {
     data = JSON.parse(text);
@@ -112,7 +118,9 @@ export function parseProject(text: string): Project | Failure {
     const wallIds = new Set(walls.map((w) => w.id));
     const openings = list(data.openings, 'Daftar bukaan').map((o) => opening(o, wallIds));
     const rooms = list(data.rooms, 'Daftar ruangan').map(room);
-    const items = data.version === 1 ? [] : list(data.furniture, 'Daftar furnitur').map(furniture);
+    const rawItems = data.version === 1 ? [] : list(data.furniture, 'Daftar furnitur');
+    const kept = rawItems.filter((v) => !(isObj(v) && typeof v.kind === 'string' && REMOVED_KINDS.has(v.kind)));
+    const items = kept.map(furniture);
 
     const ids = [...walls, ...openings, ...rooms, ...items].map((x) => x.id);
     if (new Set(ids).size !== ids.length) fail('Ada ID ganda di file');
@@ -123,7 +131,8 @@ export function parseProject(text: string): Project | Failure {
       if (error) fail(error);
     });
 
-    return { version: 2, name: str(data.name, 'Nama project'), walls, openings, rooms, furniture: items };
+    const project: Project = { version: 2, name: str(data.name, 'Nama project'), walls, openings, rooms, furniture: items };
+    return { project, dropped: rawItems.length - kept.length };
   } catch (e) {
     if (e instanceof Invalid) return { error: e.message };
     throw e;

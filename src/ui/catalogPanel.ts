@@ -36,9 +36,11 @@ export function createCatalogPanel(
       const item = document.createElement('button');
       item.type = 'button';
       item.className = 'catalog-item';
-      const dot = document.createElement('span');
-      dot.className = 'catalog-dot';
-      dot.style.background = spec.color;
+      const dot = document.createElement('img');
+      dot.className = 'catalog-thumb';
+      dot.src = `${import.meta.env.BASE_URL}models/thumbs/${spec.model}.png`;
+      dot.alt = '';
+      dot.loading = 'lazy';
       const text = document.createElement('span');
       text.textContent = spec.label;
       const size = document.createElement('small');
