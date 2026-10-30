@@ -18,13 +18,17 @@ import { parseProjectWithNotes, PROJECT_EXTENSION, serializeProject } from './io
 import { projectToDxf } from './io/dxf';
 import { exportGlb } from './io/glb';
 import { pickFile, safeFilename, saveFile } from './io/download';
-import { createToolbar, TOOL_HINTS, toolForKey } from './ui/toolbar';
+import { createToolbar, TOOL_HINTS, TOOL_PROMPTS, toolForKey } from './ui/toolbar';
+import { createLayersPanel } from './ui/layersPanel';
+import { createCommandLine } from './ui/commandLine';
+import { loadLayers } from './plan/layers';
+import type { PlanTheme } from './plan/PlanView';
 
 const store = new Store(emptyProject());
 
 const toolbarEl = document.querySelector<HTMLElement>('#toolbar')!;
 const planCanvas = document.querySelector<HTMLCanvasElement>('#plan')!;
-const hintEl = document.querySelector<HTMLElement>('#hint')!;
+const statusEl = document.querySelector<HTMLElement>('#status')!;
 const toastEl = document.querySelector<HTMLElement>('#toast')!;
 
 const viewsEl = document.querySelector<HTMLElement>('#views')!;
@@ -161,7 +165,7 @@ const advisor = createAdvisor({
   toast,
 });
 
-const toolbar = createToolbar(toolbarEl, chooseTool, [
+const toolbar = createToolbar(toolbarEl, document.querySelector<HTMLElement>('#palette')!, chooseTool, [
   [{ id: 'advisor', label: 'Saran Interior', title: 'Saran interior dari foto ruangan', run: () => advisor.open() }],
   [
     { id: 'new', label: 'Baru', title: 'Gambar baru', run: () => void newProject() },
@@ -181,6 +185,12 @@ const toolbar = createToolbar(toolbarEl, chooseTool, [
     { id: 'view-both', label: '2D + 3D', title: 'Denah dan 3D', run: () => setViewMode('both') },
     { id: 'view-3d', label: '3D', title: 'Hanya 3D', run: () => setViewMode('3d') },
     {
+      id: 'theme',
+      label: 'Gaya: CAD',
+      title: 'Ganti tampilan denah: CAD (gelap) atau kertas (terang)',
+      run: () => setTheme(document.body.dataset.planTheme === 'cad' ? 'paper' : 'cad'),
+    },
+    {
       id: 'fit',
       label: 'Pas-kan',
       title: 'Tampilkan seluruh rumah di denah dan 3D',
@@ -192,6 +202,7 @@ const toolbar = createToolbar(toolbarEl, chooseTool, [
   ],
 ]);
 setViewMode('both');
+setTheme(readTheme());
 
 let toastTimer = 0;
 function toast(msg: string): void {
@@ -226,14 +237,54 @@ function toast(msg: string): void {
   document.querySelector('#plan-pane')!.append(bar, hint);
 }
 
-const properties = createPropertiesPanel(document.querySelector<HTMLElement>('#plan-pane')!, store, () => plan.toolState.selected, toast);
+const properties = createPropertiesPanel(document.querySelector<HTMLElement>('#sidebar')!, store, () => plan.toolState.selected, toast);
+
+createLayersPanel(document.querySelector<HTMLElement>('#layers')!, loadLayers(), (layers) => plan.setLayers(layers));
+
+// drawing look: dark CAD (default) or light paper, remembered on this device
+const THEME_KEY = 'rea:plan-theme';
+function readTheme(): PlanTheme {
+  try {
+    return localStorage.getItem(THEME_KEY) === 'paper' ? 'paper' : 'cad';
+  } catch {
+    return 'cad';
+  }
+}
+function setTheme(theme: PlanTheme): void {
+  plan.setTheme(theme);
+  document.body.dataset.planTheme = theme;
+  toolbar.setPressed('theme', theme === 'cad');
+  const b = document.querySelector<HTMLButtonElement>('[data-action="theme"]');
+  if (b) b.textContent = theme === 'cad' ? 'Gaya: CAD' : 'Gaya: Kertas';
+  try {
+    localStorage.setItem(THEME_KEY, theme);
+  } catch {
+    // storage blocked: the choice lasts until reload
+  }
+}
+
+const commandLine = createCommandLine(document.querySelector<HTMLFormElement>('#command')!, (cmd) => {
+  if (cmd.kind === 'tool') chooseTool(cmd.tool);
+  else if (cmd.kind === 'action') {
+    if (cmd.action === 'zoom') plan.fit();
+    else if (cmd.action === 'undo') undo();
+    else redo();
+  } else if (cmd.kind === 'length') {
+    if (!plan.typeLength(cmd.meters)) toast('Mulai garis dulu: pilih DINDING atau RUANG lalu klik titik awal.');
+  } else toast(`Perintah tidak dikenal: ${cmd.text}. Contoh: DINDING, PINTU, JENDELA, RUANG, ZOOM, 4500.`);
+});
+
+plan.onCursor = (at) => {
+  statusEl.textContent = at ? `X ${Math.round(at.x * 1000)}  Y ${Math.round(at.y * 1000)} mm` : '';
+};
 store.subscribe(() => properties.refresh());
 
 plan.onMessage = toast;
 plan.onStateChange = (s) => {
   toolbar.setTool(s.tool);
   view3d.setSelection(s.selected?.kind === 'furniture' ? s.selected.id : undefined);
-  hintEl.textContent = TOOL_HINTS[s.tool];
+  commandLine.setPrompt(TOOL_PROMPTS[s.tool]);
+  document.querySelector<HTMLInputElement>('#command-input')!.title = TOOL_HINTS[s.tool];
   properties.refresh();
 };
 plan.setTool('wall');

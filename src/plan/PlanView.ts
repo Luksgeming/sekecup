@@ -8,26 +8,68 @@ import { drawOrder, footprint, furnitureAt } from '../geometry/footprint';
 import { FLOOR_MATERIALS, FURNITURE, hangsFromCeiling, type FurnitureKind } from '../interior/kinds';
 import { askText } from '../ui/dialog';
 import { parseLength } from '../geometry/length';
-import { labelSide, WheelGesture } from './navigation';
+import { WheelGesture } from './navigation';
+import { dimensionsFor, type Dimension } from './dimensions';
+import { roomSchedule } from './schedule';
+import { furnitureSymbol } from './symbols';
+import { loadLayers, type LayerState } from './layers';
 import { handleClick, handleKey, handleLengthInput, initialToolState, type Selection, nearestWall, reconcile, type ToolName, type ToolResult, type ToolState } from './tools';
 
 const DRAG_THRESHOLD_PX = 4;
 // a finger tap wobbles more than a mouse click
 const TOUCH_THRESHOLD_PX = 10;
 
-const COLORS = {
-  bg: '#f7f5f0',
-  gridMinor: '#ebe7de',
-  gridMajor: '#d8d2c4',
-  wall: '#2b2a27',
-  room: 'rgba(196, 170, 120, 0.22)',
-  roomLabel: '#5a4a2c',
-  draft: '#c2410c',
-  selected: '#2563eb',
-  door: '#8a5a2b',
-  window: '#3b82c4',
-  label: '#6b6658',
-  furniture: '#e4dfd4',
+export type PlanTheme = 'cad' | 'paper';
+
+const SCHEDULE_WIDTH = 200;
+
+const CAD_FONT = "'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace";
+
+const THEMES = {
+  // dark drafting screen, like a CAD program
+  cad: {
+    bg: '#1d232c',
+    gridMinor: '#222a35',
+    gridMajor: '#2a3441',
+    wall: '#dfe5ec',
+    wallFill: '#1d232c',
+    hatch: '#6f7c8c',
+    roomLabel: '#f2d14b',
+    text: '#dfe5ec',
+    furniture: '#c3ccd7',
+    furnitureFill: 'rgba(195, 204, 215, 0.05)',
+    door: '#4fd683',
+    window: '#4cc9e8',
+    dim: '#4cc9e8',
+    schedule: '#f2d14b',
+    compass: '#8a97a8',
+    draft: '#ff9a4a',
+    draftFill: 'rgba(255, 154, 74, 0.12)',
+    selected: '#5aa8ff',
+    selectedFill: 'rgba(90, 168, 255, 0.18)',
+  },
+  // light, paper-like plan
+  paper: {
+    bg: '#f7f5f0',
+    gridMinor: '#ebe7de',
+    gridMajor: '#d8d2c4',
+    wall: '#2b2a27',
+    wallFill: '#f7f5f0',
+    hatch: '#8f887a',
+    roomLabel: '#5a4a2c',
+    text: '#2b2a27',
+    furniture: '#4a4740',
+    furnitureFill: 'rgba(228, 223, 212, 0.9)',
+    door: '#8a5a2b',
+    window: '#3b82c4',
+    dim: '#6b6658',
+    schedule: '#5a4a2c',
+    compass: '#8f887a',
+    draft: '#c2410c',
+    draftFill: 'rgba(194, 65, 12, 0.12)',
+    selected: '#2563eb',
+    selectedFill: 'rgba(37, 99, 235, 0.15)',
+  },
 };
 
 export class PlanView {
@@ -40,6 +82,10 @@ export class PlanView {
   private panning?: { start: Vec2; center: Vec2; click?: { world: Vec2; shift: boolean }; moved?: boolean };
   private spaceDown = false;
   private wheel = new WheelGesture();
+  private theme: PlanTheme = 'cad';
+  private c = THEMES.cad;
+  private hatch?: CanvasPattern | string;
+  private layers: LayerState = loadLayers();
   private lengthInput?: HTMLInputElement;
   // a press on a corner or furniture becomes a drag only after the pointer really moves
   private drag?: {
@@ -55,6 +101,7 @@ export class PlanView {
 
   onMessage: (msg: string) => void = () => {};
   onStateChange: (s: ToolState) => void = () => {};
+  onCursor: (at: Vec2 | undefined) => void = () => {};
 
   private canvas: HTMLCanvasElement;
   private store: Store;
@@ -103,17 +150,23 @@ export class PlanView {
     this.draw();
   }
 
-  /** Zooms and centers so the whole drawing fits the canvas. */
+  /** Zooms and centers so the whole drawing, its dimensions and the room schedule fit the canvas. */
   fit(): void {
     const p = this.store.project;
     const pts = [...p.walls.flatMap((w) => [w.a, w.b]), ...p.rooms.flatMap((r) => r.points), ...p.furniture.flatMap(footprint)];
     if (!pts.length) return;
-    const min = { x: Math.min(...pts.map((q) => q.x)), y: Math.min(...pts.map((q) => q.y)) };
-    const max = { x: Math.max(...pts.map((q) => q.x)), y: Math.max(...pts.map((q) => q.y)) };
-    const margin = 60;
+    // room for the dimension lines around the walls
+    const pad = this.layers.dimensions && p.walls.length ? 1.2 : 0.3;
+    const min = { x: Math.min(...pts.map((q) => q.x)) - pad, y: Math.min(...pts.map((q) => q.y)) - pad };
+    const max = { x: Math.max(...pts.map((q) => q.x)) + pad, y: Math.max(...pts.map((q) => q.y)) + pad };
+    // the schedule table keeps a fixed on-screen width to the right of the drawing
+    const table = this.layers.schedule && p.rooms.length ? SCHEDULE_WIDTH + 24 : 0;
+    const margin = 36;
     const { x: w, y: h } = this.size;
-    this.zoom = Math.min(400, Math.max(10, Math.min((w - margin * 2) / Math.max(max.x - min.x, 1), (h - margin * 2) / Math.max(max.y - min.y, 1))));
-    this.center = scale(add(min, max), 0.5);
+    const zoom = Math.min((w - margin * 2 - table) / Math.max(max.x - min.x, 1), (h - margin * 2) / Math.max(max.y - min.y, 1));
+    this.zoom = Math.min(400, Math.max(10, zoom));
+    // shift left by half the table so drawing and table together are centered
+    this.center = { x: (min.x + max.x) / 2 + table / 2 / this.zoom, y: (min.y + max.y) / 2 };
     this.draw();
   }
 
@@ -182,6 +235,14 @@ export class PlanView {
     const at = this.toScreen(this.hover ?? this.state.draft.at(-1)!);
     this.lengthInput.style.left = `${at.x + 14}px`;
     this.lengthInput.style.top = `${at.y + 14}px`;
+  }
+
+  /** A length typed on the command line: places the next wall/room point. False when no line is being drawn. */
+  typeLength(meters: number): boolean {
+    const { tool, draft } = this.state;
+    if ((tool !== 'wall' && tool !== 'room') || !draft.length) return false;
+    this.applyLength(meters);
+    return true;
   }
 
   private applyLength(len: number): void {
@@ -287,6 +348,7 @@ export class PlanView {
       }
       this.shiftDown = e.shiftKey;
       this.hover = this.toWorld(s);
+      this.onCursor(this.hover);
       if (this.drag && !this.drag.moved && dist(s, this.drag.down) > DRAG_THRESHOLD_PX) this.drag.moved = true;
       if (this.drag?.moved) {
         const r = this.dragResult();
@@ -325,6 +387,7 @@ export class PlanView {
     });
     c.addEventListener('pointerleave', () => {
       this.hover = undefined;
+      this.onCursor(undefined);
       this.draw();
     });
 
@@ -380,26 +443,44 @@ export class PlanView {
     return snapPoint(this.hover, { walls: this.store.project.walls, from: this.state.draft.at(-1), ortho: this.shiftDown });
   }
 
+  /** Switches between the dark CAD drawing look and the light paper look. */
+  setTheme(theme: PlanTheme): void {
+    this.theme = theme;
+    this.c = THEMES[theme];
+    this.hatch = undefined;
+    this.draw();
+  }
+
+  setLayers(layers: LayerState): void {
+    this.layers = layers;
+    this.draw();
+  }
+
   draw(): void {
     const { ctx } = this;
     const { x: w, y: h } = this.size;
     const p = this.drag?.preview ?? this.store.project;
-    ctx.fillStyle = COLORS.bg;
+    const L = this.layers;
+    ctx.fillStyle = this.c.bg;
     ctx.fillRect(0, 0, w, h);
     this.drawGrid();
-    for (const r of p.rooms) this.drawRoom(r, this.isSelected('room', r.id));
-    for (const f of drawOrder(p.furniture)) this.drawFurniture(f, false);
-    for (const wall of p.walls) this.drawWall(wall, this.isSelected('wall', wall.id));
-    for (const o of p.openings) {
-      const wall = p.walls.find((x) => x.id === o.wallId);
-      if (wall) this.drawOpening(wall, o, this.isSelected('opening', o.id));
+    if (L.rooms) for (const r of p.rooms) this.drawRoom(r, this.isSelected('room', r.id));
+    if (L.furniture) for (const f of drawOrder(p.furniture)) if (!hangsFromCeiling(f.kind)) this.drawFurniture(f, false);
+    if (L.walls) this.drawWalls(p);
+    if (L.openings) {
+      for (const o of p.openings) {
+        const wall = p.walls.find((x) => x.id === o.wallId);
+        if (wall) this.drawOpening(wall, o, this.isSelected('opening', o.id));
+      }
     }
-    // the selected piece is drawn again on top, so walls never hide its outline
+    // overhead pieces and the selection go on top, so walls never hide them
+    if (L.furniture) for (const f of p.furniture) if (hangsFromCeiling(f.kind)) this.drawFurniture(f, false);
     const picked = p.furniture.find((f) => this.isSelected('furniture', f.id));
-    if (picked) this.drawFurniture(picked, true);
-    for (const r of p.rooms) this.drawRoomLabel(r.name, r.points);
-    const houseCenter = centerOf(p);
-    for (const wall of p.walls) this.drawLength(wall.a, wall.b, houseCenter);
+    if (picked && L.furniture) this.drawFurniture(picked, true);
+    if (L.rooms) for (const r of p.rooms) this.drawRoomLabel(r.name, r.points);
+    if (L.dimensions) for (const d of dimensionsFor(p)) this.drawDimension(d);
+    if (L.schedule) this.drawSchedule(p);
+    this.drawCompass();
     this.drawDraft(p);
   }
 
@@ -411,7 +492,7 @@ export class PlanView {
     const { ctx } = this;
     const tl = this.toWorld({ x: 0, y: 0 });
     const br = this.toWorld(this.size);
-    const steps: [number, string][] = this.zoom > 30 ? [[0.1, COLORS.gridMinor], [1, COLORS.gridMajor]] : [[1, COLORS.gridMajor]];
+    const steps: [number, string][] = this.zoom > 30 ? [[0.1, this.c.gridMinor], [1, this.c.gridMajor]] : [[1, this.c.gridMajor]];
     for (const [step, color] of steps) {
       ctx.strokeStyle = color;
       ctx.lineWidth = 1;
@@ -441,18 +522,25 @@ export class PlanView {
     ctx.closePath();
   }
 
+  private line(a: Vec2, b: Vec2): void {
+    const s1 = this.toScreen(a);
+    const s2 = this.toScreen(b);
+    this.ctx.moveTo(s1.x, s1.y);
+    this.ctx.lineTo(s2.x, s2.y);
+  }
+
   private drawRoom(room: Room, selected: boolean): void {
     this.polygonPath(room.points);
-    this.ctx.fillStyle = FLOOR_MATERIALS[room.floor].color;
-    this.ctx.globalAlpha = 0.55;
-    this.ctx.fill();
-    this.ctx.globalAlpha = 1;
-    if (selected) {
-      this.ctx.fillStyle = 'rgba(37, 99, 235, 0.12)';
+    if (this.theme === 'paper') {
+      this.ctx.fillStyle = FLOOR_MATERIALS[room.floor].color;
+      this.ctx.globalAlpha = 0.55;
       this.ctx.fill();
+      this.ctx.globalAlpha = 1;
     }
     if (selected) {
-      this.ctx.strokeStyle = COLORS.selected;
+      this.ctx.fillStyle = this.c.selectedFill;
+      this.ctx.fill();
+      this.ctx.strokeStyle = this.c.selected;
       this.ctx.lineWidth = 2;
       this.ctx.stroke();
     }
@@ -461,32 +549,37 @@ export class PlanView {
   private drawFurniture(f: Furniture, selected: boolean, ghost = false): void {
     const { ctx } = this;
     const corners = footprint(f);
-    // ceiling pieces follow the drafting convention for things overhead: dashed and see-through
-    const overhead = hangsFromCeiling(f.kind);
-    this.polygonPath(corners);
-    ctx.fillStyle = COLORS.furniture;
-    ctx.globalAlpha = ghost ? 0.4 : overhead ? 0.35 : 0.9;
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = ghost ? COLORS.draft : selected ? COLORS.selected : 'rgba(43, 42, 39, 0.75)';
-    ctx.lineWidth = selected ? 2.5 : 1;
-    if (overhead) ctx.setLineDash([5, 4]);
+    const sym = furnitureSymbol(f.kind);
+    const r = (f.rotation * Math.PI) / 180;
+    const [cos, sin] = [Math.cos(r), Math.sin(r)];
+    const place = (v: Vec2): Vec2 => ({ x: f.x + v.x * cos - v.y * sin, y: f.y + v.x * sin + v.y * cos });
+
+    // a faint fill keeps furniture readable over the grid and floor
+    if (!sym.dashed) {
+      this.polygonPath(corners);
+      ctx.fillStyle = ghost ? this.c.draftFill : this.c.furnitureFill;
+      ctx.fill();
+    }
+    ctx.strokeStyle = ghost ? this.c.draft : selected ? this.c.selected : this.c.furniture;
+    ctx.lineWidth = selected ? 2 : 1;
+    // ceiling pieces follow the drafting convention for things overhead: dashed
+    if (sym.dashed) ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    for (const [a, b] of sym.lines) this.line(place(a), place(b));
+    for (const c of sym.circles) {
+      const s = this.toScreen(place(c.c));
+      ctx.moveTo(s.x + c.r * this.zoom, s.y);
+      ctx.arc(s.x, s.y, c.r * this.zoom, 0, Math.PI * 2);
+    }
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // a short line on the back edge shows which way the piece faces
-    const back = [this.toScreen(corners[0]), this.toScreen(corners[1])];
-    ctx.lineWidth = selected ? 3 : 2.5;
-    ctx.beginPath();
-    ctx.moveTo(back[0].x, back[0].y);
-    ctx.lineTo(back[1].x, back[1].y);
-    ctx.stroke();
-
+    if (this.theme !== 'paper') return;
     const { w, d } = FURNITURE[f.kind].size;
     const flat = f.rotation % 180 === 90 ? d : w; // on-screen width of the piece
     if (Math.min(w, d) * this.zoom < 28) return;
     const c = this.toScreen(f);
-    ctx.fillStyle = '#2b2a27';
+    ctx.fillStyle = this.c.text;
     ctx.font = '10px system-ui, sans-serif';
     ctx.textAlign = 'center';
     // only label pieces wide enough to hold their name
@@ -500,10 +593,11 @@ export class PlanView {
     const s = this.toScreen(c);
     const { ctx } = this;
     ctx.textAlign = 'center';
-    ctx.fillStyle = COLORS.roomLabel;
-    ctx.font = '600 13px system-ui, sans-serif';
-    ctx.fillText(name, s.x, s.y - 2);
-    ctx.font = '12px system-ui, sans-serif';
+    ctx.fillStyle = this.c.roomLabel;
+    const cad = this.theme === 'cad';
+    ctx.font = cad ? `500 13px ${CAD_FONT}` : '600 13px system-ui, sans-serif';
+    ctx.fillText(cad ? name.toUpperCase() : name, s.x, s.y - 2);
+    ctx.font = cad ? `11px ${CAD_FONT}` : '12px system-ui, sans-serif';
     ctx.fillText(`${polygonArea(points).toFixed(2)} m²`, s.x, s.y + 14);
   }
 
@@ -513,72 +607,212 @@ export class PlanView {
     return [add(a, n), add(b, n), sub(b, n), sub(a, n)];
   }
 
-  private drawWall(wall: Wall, selected: boolean): void {
+  private wallOutline(wall: Wall): Vec2[] {
     // extend by half the thickness so corners meet without a notch
     const ext = scale(normalize(sub(wall.b, wall.a)), wall.thickness / 2);
-    this.polygonPath(this.wallCorners(sub(wall.a, ext), add(wall.b, ext), wall.thickness));
-    this.ctx.fillStyle = selected ? COLORS.selected : COLORS.wall;
-    this.ctx.fill();
+    return this.wallCorners(sub(wall.a, ext), add(wall.b, ext), wall.thickness);
+  }
+
+  /** Diagonal ANSI31-style hatch, as a repeating canvas pattern. */
+  private hatchPattern(): CanvasPattern | string {
+    if (this.hatch) return this.hatch;
+    const tile = document.createElement('canvas');
+    tile.width = tile.height = 8;
+    const t = tile.getContext('2d')!;
+    t.fillStyle = this.c.wallFill;
+    t.fillRect(0, 0, 8, 8);
+    t.strokeStyle = this.c.hatch;
+    t.lineWidth = 1;
+    t.beginPath();
+    t.moveTo(0, 8);
+    t.lineTo(8, 0);
+    t.moveTo(-2, 2);
+    t.lineTo(2, -2);
+    t.moveTo(6, 10);
+    t.lineTo(10, 6);
+    t.stroke();
+    this.hatch = this.ctx.createPattern(tile, 'repeat') ?? this.c.wallFill;
+    return this.hatch;
+  }
+
+  private drawWalls(p: Project): void {
+    const { ctx } = this;
+    // outlines first, thick, then every fill on top: where walls meet, the fill of one
+    // wall covers the other's seam, so only the outer edge of the whole wall stays drawn
+    ctx.lineWidth = 2.5;
+    for (const wall of p.walls) {
+      this.polygonPath(this.wallOutline(wall));
+      ctx.strokeStyle = this.isSelected('wall', wall.id) ? this.c.selected : this.c.wall;
+      ctx.stroke();
+    }
+    const fill = this.layers.hatch ? this.hatchPattern() : this.c.wallFill;
+    for (const wall of p.walls) {
+      this.polygonPath(this.wallOutline(wall));
+      ctx.fillStyle = this.isSelected('wall', wall.id) ? this.c.selectedFill : fill;
+      ctx.fill();
+    }
   }
 
   private drawOpening(wall: Wall, o: Opening, selected: boolean): void {
     const { ctx } = this;
     const dir = normalize(sub(wall.b, wall.a));
+    const n = scale({ x: -dir.y, y: dir.x }, wall.thickness / 2);
     const start = add(wall.a, scale(dir, o.offset - o.width / 2));
     const end = add(wall.a, scale(dir, o.offset + o.width / 2));
-    // clear the wall where the opening is
+    // clear the wall where the opening is, then draw the jambs
     this.polygonPath(this.wallCorners(start, end, wall.thickness + 0.02));
-    ctx.fillStyle = COLORS.bg;
+    ctx.fillStyle = this.c.bg;
     ctx.fill();
+    ctx.strokeStyle = this.c.wall;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    this.line(add(start, n), sub(start, n));
+    this.line(add(end, n), sub(end, n));
+    ctx.stroke();
 
-    const color = selected ? COLORS.selected : o.type === 'door' ? COLORS.door : COLORS.window;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = selected ? 2.5 : 1.5;
+    ctx.strokeStyle = selected ? this.c.selected : o.type === 'door' ? this.c.door : this.c.window;
+    ctx.lineWidth = selected ? 2.5 : 1.2;
+    ctx.beginPath();
     if (o.type === 'window') {
-      this.polygonPath(this.wallCorners(start, end, wall.thickness));
-      ctx.stroke();
-      const s1 = this.toScreen(start);
-      const s2 = this.toScreen(end);
-      ctx.beginPath();
-      ctx.moveTo(s1.x, s1.y);
-      ctx.lineTo(s2.x, s2.y);
-      ctx.stroke();
+      // three parallel lines: both wall faces and the glass
+      this.line(add(start, n), add(end, n));
+      this.line(start, end);
+      this.line(sub(start, n), sub(end, n));
     } else {
       // door leaf + swing arc
       const hinge = this.toScreen(start);
       const leafEnd = this.toScreen(add(start, scale({ x: -dir.y, y: dir.x }, o.width)));
       const r = o.width * this.zoom;
       const base = Math.atan2(dir.y, dir.x);
-      ctx.beginPath();
       ctx.moveTo(hinge.x, hinge.y);
       ctx.lineTo(leafEnd.x, leafEnd.y);
       ctx.moveTo(hinge.x + Math.cos(base) * r, hinge.y + Math.sin(base) * r);
       ctx.arc(hinge.x, hinge.y, r, base, base + Math.PI / 2);
-      ctx.stroke();
     }
+    ctx.stroke();
   }
 
-  private drawLength(a: Vec2, b: Vec2, houseCenter?: Vec2): void {
+  private drawDimension(d: Dimension): void {
+    if (this.zoom < 15) return;
+    const { ctx } = this;
+    ctx.strokeStyle = this.c.dim;
+    ctx.fillStyle = this.c.dim;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    this.line(d.a, d.b);
+    // extension lines from just off the wall to a little past the dimension line
+    const past = scale(d.normal, 0.15);
+    const gap = scale(d.normal, 0.2);
+    this.line(add(d.from, gap), add(d.a, past));
+    this.line(add(d.to, gap), add(d.b, past));
+    // architectural ticks at both ends
+    const dir = normalize(sub(d.b, d.a));
+    const tick = scale(add(dir, d.normal), 0.08 / Math.SQRT2);
+    for (const end of [d.a, d.b]) this.line(sub(end, tick), add(end, tick));
+    ctx.stroke();
+
+    const mid = this.toScreen(scale(add(d.a, d.b), 0.5));
+    // keep text upright; vertical dimensions read from the bottom up, as on drawings
+    let angle = Math.atan2(dir.y, dir.x);
+    if (angle >= Math.PI / 2 - 1e-6) angle -= Math.PI;
+    else if (angle < -Math.PI / 2 - 1e-6) angle += Math.PI;
+    ctx.save();
+    ctx.translate(mid.x + d.normal.x * 8, mid.y + d.normal.y * 8);
+    ctx.rotate(angle);
+    ctx.font = `11px ${CAD_FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(d.text, 0, 0);
+    ctx.restore();
+  }
+
+  private drawSchedule(p: Project): void {
+    const s = roomSchedule(p);
+    if (!s.rows.length) return;
+    const xs = p.walls.flatMap((w) => [w.a.x, w.b.x]).concat(p.rooms.flatMap((r) => r.points.map((q) => q.x)));
+    const ys = p.walls.flatMap((w) => [w.a.y, w.b.y]).concat(p.rooms.flatMap((r) => r.points.map((q) => q.y)));
+    // the table sits to the right of the drawing, past the dimensions, at a fixed on-screen size
+    const at = this.toScreen({ x: Math.max(...xs) + 1.2, y: Math.min(...ys) - 0.6 });
+    const { ctx } = this;
+    const rowH = 20;
+    const colW = [SCHEDULE_WIDTH - 70, 70];
+    const width = colW[0] + colW[1];
+    const rows = [...s.rows.map((r) => [r.name, `${r.area.toFixed(1)} m²`]), ['Total', `${s.total.toFixed(1)} m²`]];
+    const height = rowH * (rows.length + 2);
+    ctx.strokeStyle = this.c.schedule;
+    ctx.fillStyle = this.c.schedule;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(at.x + 0.5, at.y + 0.5, width, height);
+    ctx.beginPath();
+    for (let i = 1; i < rows.length + 2; i++) {
+      ctx.moveTo(at.x, at.y + rowH * i + 0.5);
+      ctx.lineTo(at.x + width, at.y + rowH * i + 0.5);
+    }
+    ctx.moveTo(at.x + colW[0] + 0.5, at.y + rowH);
+    ctx.lineTo(at.x + colW[0] + 0.5, at.y + height);
+    ctx.stroke();
+    ctx.textBaseline = 'middle';
+    ctx.font = `600 12px ${CAD_FONT}`;
+    ctx.textAlign = 'center';
+    ctx.fillText('JADWAL RUANGAN', at.x + width / 2, at.y + rowH / 2);
+    ctx.font = `11px ${CAD_FONT}`;
+    ctx.fillText('Ruangan', at.x + colW[0] / 2, at.y + rowH * 1.5);
+    ctx.fillText('Luas', at.x + colW[0] + colW[1] / 2, at.y + rowH * 1.5);
+    rows.forEach(([name, area], i) => {
+      const y = at.y + rowH * (i + 2.5);
+      ctx.textAlign = 'left';
+      ctx.fillText(name.length > 16 ? name.slice(0, 15) + '…' : name, at.x + 6, y);
+      ctx.textAlign = 'right';
+      ctx.fillText(area, at.x + width - 6, y);
+    });
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  private drawCompass(): void {
+    const { ctx } = this;
+    const r = 26;
+    const c = { x: this.size.x - r - 18, y: r + 18 };
+    ctx.strokeStyle = this.c.compass;
+    ctx.fillStyle = this.c.compass;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(c.x, c.y - r + 6);
+    ctx.lineTo(c.x + 5, c.y);
+    ctx.lineTo(c.x - 5, c.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.font = `600 10px ${CAD_FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('U', c.x, c.y - r - 8);
+    ctx.fillText('S', c.x, c.y + r + 8);
+    ctx.fillText('T', c.x + r + 8, c.y);
+    ctx.fillText('B', c.x - r - 8, c.y);
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  private drawLength(a: Vec2, b: Vec2): void {
     if (this.zoom < 25) return;
     const mid = this.toScreen(scale(add(a, b), 0.5));
     const dir = normalize(sub(b, a));
-    // wall labels sit outside the house so they never cover furniture
-    const n = houseCenter ? labelSide(a, b, houseCenter) : { x: -dir.y, y: dir.x };
+    const n = { x: -dir.y, y: dir.x };
     const { ctx } = this;
-    ctx.fillStyle = COLORS.label;
-    ctx.font = '11px system-ui, sans-serif';
-    // anchor the text on the side facing away from the wall so it never overlaps the wall line
+    ctx.fillStyle = this.c.draft;
+    ctx.font = `11px ${CAD_FONT}`;
     ctx.textAlign = n.x > 0.5 ? 'left' : n.x < -0.5 ? 'right' : 'center';
     const gap = 12;
     const baseline = n.y > 0.5 ? 10 : n.y < -0.5 ? -2 : 4;
-    ctx.fillText(formatLength(dist(a, b)), mid.x + n.x * gap, mid.y + n.y * gap + baseline);
+    ctx.fillText(String(Math.round(dist(a, b) * 1000)), mid.x + n.x * gap, mid.y + n.y * gap + baseline);
   }
 
   private drawCorners(p: Project): void {
     const { ctx } = this;
     const seen = new Set<string>();
-    ctx.fillStyle = '#fff';
-    ctx.strokeStyle = COLORS.selected;
+    ctx.fillStyle = this.c.bg;
+    ctx.strokeStyle = this.c.selected;
     ctx.lineWidth = 1.5;
     for (const w of p.walls) {
       for (const end of [w.a, w.b]) {
@@ -586,8 +820,9 @@ export class PlanView {
         if (seen.has(key)) continue;
         seen.add(key);
         const s = this.toScreen(end);
+        // square grips, as CAD programs draw them
         ctx.beginPath();
-        ctx.arc(s.x, s.y, 5, 0, Math.PI * 2);
+        ctx.rect(s.x - 4, s.y - 4, 8, 8);
         ctx.fill();
         ctx.stroke();
       }
@@ -609,7 +844,7 @@ export class PlanView {
       const wall = nearestWall(p, this.hover);
       if (wall) {
         this.polygonPath(this.wallCorners(wall.a, wall.b, wall.thickness + 0.06));
-        ctx.strokeStyle = COLORS.draft;
+        ctx.strokeStyle = this.c.draft;
         ctx.lineWidth = 1.5;
         ctx.stroke();
       }
@@ -618,7 +853,7 @@ export class PlanView {
     if (tool !== 'wall' && tool !== 'room') return;
     const pts = hover ? [...draft, hover] : draft;
     if (pts.length > 1) {
-      ctx.strokeStyle = COLORS.draft;
+      ctx.strokeStyle = this.c.draft;
       ctx.lineWidth = 2;
       ctx.setLineDash([6, 4]);
       ctx.beginPath();
@@ -634,19 +869,19 @@ export class PlanView {
       this.drawLength(prev, last);
     }
     if (hover) {
+      // crosshair cursor, CAD style
       const s = this.toScreen(hover);
-      ctx.fillStyle = COLORS.draft;
+      ctx.strokeStyle = this.c.draft;
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.arc(s.x, s.y, 4, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(s.x - 10, s.y);
+      ctx.lineTo(s.x + 10, s.y);
+      ctx.moveTo(s.x, s.y - 10);
+      ctx.lineTo(s.x, s.y + 10);
+      ctx.rect(s.x - 3, s.y - 3, 6, 6);
+      ctx.stroke();
     }
   }
-}
-
-function centerOf(p: Project): Vec2 | undefined {
-  if (!p.walls.length) return undefined;
-  const pts = p.walls.flatMap((w) => [w.a, w.b]);
-  return scale(pts.reduce(add, { x: 0, y: 0 }), 1 / pts.length);
 }
 
 export function isTextField(t: EventTarget | null): boolean {

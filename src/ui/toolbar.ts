@@ -2,14 +2,24 @@ import type { ToolName } from '../plan/tools';
 
 export type ToolbarAction = { id: string; label: string; title?: string; run: () => void };
 
-const TOOLS: { tool: ToolName; label: string; key: string }[] = [
-  { tool: 'select', label: 'Pilih', key: 'V' },
-  { tool: 'wall', label: 'Dinding', key: 'W' },
-  { tool: 'door', label: 'Pintu', key: 'D' },
-  { tool: 'window', label: 'Jendela', key: 'J' },
-  { tool: 'room', label: 'Ruangan', key: 'R' },
-  { tool: 'furniture', label: 'Furnitur', key: 'F' },
+const TOOLS: { tool: ToolName; label: string; key: string; group: string }[] = [
+  { tool: 'wall', label: 'Dinding', key: 'W', group: 'Gambar' },
+  { tool: 'room', label: 'Ruangan', key: 'R', group: 'Gambar' },
+  { tool: 'door', label: 'Pintu', key: 'D', group: 'Bukaan' },
+  { tool: 'window', label: 'Jendela', key: 'J', group: 'Bukaan' },
+  { tool: 'furniture', label: 'Furnitur', key: 'F', group: 'Isi' },
+  { tool: 'select', label: 'Pilih / ubah', key: 'V', group: 'Ubah' },
 ];
+
+/** What the command line asks for while each tool is active, CAD style. */
+export const TOOL_PROMPTS: Record<ToolName, string> = {
+  select: 'PILIH  Klik objek, seret sudut/furnitur:',
+  wall: 'DINDING  Klik titik, atau ketik panjang (mm):',
+  door: 'PINTU  Klik dinding:',
+  window: 'JENDELA  Klik dinding:',
+  room: 'RUANG  Klik sudut, atau ketik panjang sisi:',
+  furniture: 'FURNITUR  Klik untuk menaruh:',
+};
 
 export const TOOL_HINTS: Record<ToolName, string> = {
   select: 'Klik untuk memilih, Delete untuk menghapus. Seret sudut atau furnitur untuk memindah, R untuk memutar.',
@@ -26,6 +36,7 @@ export function toolForKey(key: string): ToolName | undefined {
 
 export function createToolbar(
   el: HTMLElement,
+  paletteEl: HTMLElement,
   onTool: (t: ToolName) => void,
   groups: ToolbarAction[][],
 ): {
@@ -40,12 +51,26 @@ export function createToolbar(
   brand.textContent = 'REA';
   el.append(brand);
 
-  const toolGroup = group(el);
+  // drawing tools live in the left palette, grouped like a CAD ribbon
+  paletteEl.replaceChildren();
   const toolButtons = new Map<ToolName, HTMLButtonElement>();
+  let section: HTMLElement | undefined;
+  let current = '';
   for (const t of TOOLS) {
+    if (t.group !== current) {
+      current = t.group;
+      section = document.createElement('section');
+      const h = document.createElement('h2');
+      h.textContent = t.group;
+      section.append(h);
+      paletteEl.append(section);
+    }
     const b = button(t.label, `${t.label} (${t.key})`, () => onTool(t.tool));
+    const key = document.createElement('kbd');
+    key.textContent = t.key;
+    b.append(key);
     toolButtons.set(t.tool, b);
-    toolGroup.append(b);
+    section!.append(b);
   }
 
   const actionButtons = new Map<string, HTMLButtonElement>();
@@ -53,6 +78,7 @@ export function createToolbar(
     const g = group(el);
     for (const a of actions) {
       const b = button(a.label, a.title ?? a.label, a.run);
+      b.dataset.action = a.id;
       actionButtons.set(a.id, b);
       g.append(b);
     }

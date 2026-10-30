@@ -8,14 +8,23 @@
   </head>
   <body>
     <header id="toolbar"></header>
-    <main id="views">
-      <section class="pane" id="plan-pane">
-        <canvas id="plan"></canvas>
-      </section>
-      <section class="pane" id="view3d-pane"></section>
-    </main>
-    <footer>
-      <span id="hint"></span>
+    <div id="workspace">
+      <nav id="palette" aria-label="Alat gambar"></nav>
+      <main id="views">
+        <section class="pane" id="plan-pane">
+          <canvas id="plan"></canvas>
+        </section>
+        <section class="pane" id="view3d-pane"></section>
+      </main>
+      <aside id="sidebar" aria-label="Layer dan properti">
+        <section id="layers"></section>
+      </aside>
+    </div>
+    <footer id="commandbar">
+      <form id="command" autocomplete="off">
+        <label for="command-input" id="command-prompt">Perintah:</label>
+        <input id="command-input" spellcheck="false" placeholder="ketik perintah (DINDING, PINTU, ZOOM…) atau panjang" />
+      </form>
       <span id="status"></span>
     </footer>
     <div id="toast" role="status" hidden></div>
