@@ -26,7 +26,11 @@ const toastEl = document.querySelector<HTMLElement>('#toast')!;
 
 const viewsEl = document.querySelector<HTMLElement>('#views')!;
 const plan = new PlanView(planCanvas, store);
-const view3d = new View3D(document.querySelector<HTMLElement>('#view3d-pane')!, store);
+const view3d = new View3D(document.querySelector<HTMLElement>('#view3d-pane')!, store, {
+  clickFloor: (at, shift) => plan.clickAt(at, shift),
+  selectFurniture: (id) => plan.select({ kind: 'furniture', id }),
+  isPlacing: () => plan.toolState.placing !== undefined,
+});
 
 type ViewMode = '2d' | 'both' | '3d';
 function setViewMode(mode: ViewMode): void {
@@ -48,6 +52,7 @@ async function openProjectFile(): Promise<void> {
     return;
   }
   store.load(p);
+  plan.fit();
   view3d.fit();
   toast(`Dibuka: ${p.name}`);
 }
@@ -80,7 +85,7 @@ function exportDxf(): void {
 async function exportModel(): Promise<void> {
   let blob: Blob;
   try {
-    blob = await exportGlb(view3d.house3d);
+    blob = await exportGlb(view3d.exportModel());
   } catch {
     toast('Gagal export model 3D');
     return;
@@ -148,7 +153,15 @@ const toolbar = createToolbar(toolbarEl, chooseTool, [
     { id: 'view-2d', label: '2D', title: 'Hanya denah', run: () => setViewMode('2d') },
     { id: 'view-both', label: '2D + 3D', title: 'Denah dan 3D', run: () => setViewMode('both') },
     { id: 'view-3d', label: '3D', title: 'Hanya 3D', run: () => setViewMode('3d') },
-    { id: 'fit', label: 'Pas-kan', title: 'Arahkan kamera 3D ke seluruh rumah', run: () => view3d.fit() },
+    {
+      id: 'fit',
+      label: 'Pas-kan',
+      title: 'Tampilkan seluruh rumah di denah dan 3D',
+      run: () => {
+        plan.fit();
+        view3d.fit();
+      },
+    },
   ],
 ]);
 setViewMode('both');
@@ -167,6 +180,7 @@ store.subscribe(() => properties.refresh());
 plan.onMessage = toast;
 plan.onStateChange = (s) => {
   toolbar.setTool(s.tool);
+  view3d.setSelection(s.selected?.kind === 'furniture' ? s.selected.id : undefined);
   hintEl.textContent = TOOL_HINTS[s.tool];
   properties.refresh();
 };
@@ -212,6 +226,7 @@ function showStorageBanner(): void {
 }
 
 startAutosave(store, undefined, { onWriteError: showStorageBanner }).then(({ ok, flush }) => {
+  plan.fit();
   if (!ok) showStorageBanner();
   // save right away when the tab or window goes away, instead of waiting for the timer
   window.addEventListener('pagehide', () => void flush());

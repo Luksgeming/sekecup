@@ -76,3 +76,26 @@ describe('rotation direction', () => {
     expect(Math.sign(backX3d)).toBe(Math.sign(backX2d));
   });
 });
+
+describe('low walls', () => {
+  it('cuts walls at the given height', () => {
+    const size = new THREE.Box3().setFromObject(buildMeshes(oneWall(), { wallCut: 1.2 })).getSize(new THREE.Vector3());
+    expect(size.y).toBeCloseTo(1.2);
+  });
+
+  it('drops the wall piece above a window when cut below it, and cuts the glass', () => {
+    const p = oneWall();
+    const q = addOpening(p, { wallId: p.walls[0].id, type: 'window', offset: 2, ...WINDOW_DEFAULTS }) as Project;
+    const g = buildMeshes(q, { wallCut: 1.2 });
+    // left, right and below the window; the piece above (2.1–2.8) is gone
+    expect(ofKind(g, 'wall')).toHaveLength(3);
+    const glass = new THREE.Box3().setFromObject(ofKind(g, 'glass')[0]);
+    expect(glass.max.y).toBeCloseTo(1.2);
+  });
+
+  it('leaves furniture untouched', () => {
+    const p = addFurniture(oneWall(), 'lemari', { x: 2, y: 1 });
+    const item = ofKind(buildMeshes(p, { wallCut: 1.2 }), 'furniture')[0];
+    expect(new THREE.Box3().setFromObject(item).getSize(new THREE.Vector3()).y).toBeCloseTo(2.0, 1);
+  });
+});

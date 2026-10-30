@@ -16,8 +16,13 @@ function wallMaterial(color: string): THREE.MeshStandardMaterial {
 
 const GLASS_THICKNESS = 0.02;
 
+export type BuildOptions = {
+  /** Cut walls (and window glass) at this height so the inside of the house stays visible. */
+  wallCut?: number;
+};
+
 // Plan (x, y) maps to 3D (x, 0, y); height is the Y axis.
-export function buildMeshes(p: Project): THREE.Group {
+export function buildMeshes(p: Project, { wallCut = Infinity }: BuildOptions = {}): THREE.Group {
   const group = new THREE.Group();
   group.name = 'house';
 
@@ -25,15 +30,19 @@ export function buildMeshes(p: Project): THREE.Group {
     const len = dist(wall.a, wall.b);
     const half = wall.thickness / 2;
     for (const box of wallBoxes(wall, p.openings)) {
+      const top = Math.min(box.top, wallCut);
+      if (top - box.bottom < 0.001) continue;
       // pieces at the wall ends grow by half the thickness so corners close
       const start = box.start <= 0 ? box.start - half : box.start;
       const end = box.end >= len ? box.end + half : box.end;
-      group.add(placeOnWall(wall, start, end, box.bottom, box.top, wall.thickness, wallMaterial(wall.color), 'wall'));
+      group.add(placeOnWall(wall, start, end, box.bottom, top, wall.thickness, wallMaterial(wall.color), 'wall'));
     }
     for (const o of p.openings) {
       if (o.wallId !== wall.id || o.type !== 'window') continue;
       const s = o.offset - o.width / 2;
-      group.add(placeOnWall(wall, s, s + o.width, o.sill, o.sill + o.height, GLASS_THICKNESS, GLASS, 'glass'));
+      const top = Math.min(o.sill + o.height, wallCut);
+      if (top - o.sill < 0.001) continue;
+      group.add(placeOnWall(wall, s, s + o.width, o.sill, top, GLASS_THICKNESS, GLASS, 'glass'));
     }
   }
 

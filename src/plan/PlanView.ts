@@ -8,7 +8,8 @@ import { drawOrder, footprint, furnitureAt } from '../geometry/footprint';
 import { FLOOR_MATERIALS, FURNITURE, type FurnitureKind } from '../interior/kinds';
 import { askText } from '../ui/dialog';
 import { parseLength } from '../geometry/length';
-import { handleClick, handleKey, handleLengthInput, initialToolState, nearestWall, reconcile, type ToolName, type ToolResult, type ToolState } from './tools';
+import { labelSide, wheelAction } from './navigation';
+import { handleClick, handleKey, handleLengthInput, initialToolState, type Selection, nearestWall, reconcile, type ToolName, type ToolResult, type ToolState } from './tools';
 
 const DRAG_THRESHOLD_PX = 4;
 
@@ -32,7 +33,8 @@ export class PlanView {
   private center: Vec2 = { x: 4, y: 3 };
   private zoom = 60; // pixels per meter
   private hover?: Vec2;
-  private panning?: { start: Vec2; center: Vec2 };
+  // `click` is set when a press on empty space may still turn out to be a plain click
+  private panning?: { start: Vec2; center: Vec2; click?: { world: Vec2; shift: boolean }; moved?: boolean };
   private spaceDown = false;
   private lengthInput?: HTMLInputElement;
   // a press on a corner or furniture becomes a drag only after the pointer really moves
@@ -73,6 +75,29 @@ export class PlanView {
 
   setTool(tool: ToolName): void {
     this.setState({ ...this.state, tool, draft: [], selected: undefined, placing: undefined });
+  }
+
+  /** Runs a click at a plan point through the active tool, as if it happened on the 2D canvas. */
+  clickAt(world: Vec2, shift: boolean): void {
+    this.applyResult(handleClick(this.state, this.store.project, world, { shift }));
+  }
+
+  select(selected: Selection | undefined): void {
+    this.setState({ ...this.state, tool: 'select', placing: undefined, draft: [], selected });
+  }
+
+  /** Zooms and centers so the whole drawing fits the canvas. */
+  fit(): void {
+    const p = this.store.project;
+    const pts = [...p.walls.flatMap((w) => [w.a, w.b]), ...p.rooms.flatMap((r) => r.points), ...p.furniture.flatMap(footprint)];
+    if (!pts.length) return;
+    const min = { x: Math.min(...pts.map((q) => q.x)), y: Math.min(...pts.map((q) => q.y)) };
+    const max = { x: Math.max(...pts.map((q) => q.x)), y: Math.max(...pts.map((q) => q.y)) };
+    const margin = 60;
+    const { x: w, y: h } = this.size;
+    this.zoom = Math.min(400, Math.max(10, Math.min((w - margin * 2) / Math.max(max.x - min.x, 1), (h - margin * 2) / Math.max(max.y - min.y, 1))));
+    this.center = scale(add(min, max), 0.5);
+    this.draw();
   }
 
   /** Arms the furniture tool: the next click on the plan places `kind`. */
@@ -226,6 +251,10 @@ export class PlanView {
             : { from: from!, down, shift: e.shiftKey, moved: false };
           return;
         }
+        // empty space: dragging pans the plan, a plain click still selects
+        c.setPointerCapture(e.pointerId);
+        this.panning = { start: down, center: this.center, click: { world, shift: e.shiftKey } };
+        return;
       }
       this.applyResult(handleClick(this.state, this.store.project, world, { shift: e.shiftKey }));
     });
@@ -233,7 +262,10 @@ export class PlanView {
     c.addEventListener('pointermove', (e) => {
       const s = this.eventPoint(e);
       if (this.panning) {
-        this.center = sub(this.panning.center, scale(sub(s, this.panning.start), 1 / this.zoom));
+        if (!this.panning.moved && dist(s, this.panning.start) > DRAG_THRESHOLD_PX) this.panning.moved = true;
+        if (this.panning.moved || !this.panning.click) {
+          this.center = sub(this.panning.center, scale(sub(s, this.panning.start), 1 / this.zoom));
+        }
       }
       this.shiftDown = e.shiftKey;
       this.hover = this.toWorld(s);
@@ -246,7 +278,12 @@ export class PlanView {
     });
 
     c.addEventListener('pointerup', () => {
+      const pan = this.panning;
       this.panning = undefined;
+      if (pan?.click && !pan.moved) {
+        this.applyResult(handleClick(this.state, this.store.project, pan.click.world, { shift: pan.click.shift }));
+        return;
+      }
       const drag = this.drag;
       if (!drag) return;
       if (!drag.moved) {
@@ -277,9 +314,16 @@ export class PlanView {
       'wheel',
       (e) => {
         e.preventDefault();
+        if (wheelAction(e) === 'pan') {
+          this.center = add(this.center, scale({ x: e.deltaX, y: e.deltaY }, 1 / this.zoom));
+          this.draw();
+          return;
+        }
         const s = this.eventPoint(e);
         const before = this.toWorld(s);
-        this.zoom = Math.min(400, Math.max(10, this.zoom * Math.exp(-e.deltaY * 0.0015)));
+        // a pinch sends small deltas, so it needs a stronger factor than a wheel notch
+        const speed = e.ctrlKey ? 0.01 : 0.0015;
+        this.zoom = Math.min(400, Math.max(10, this.zoom * Math.exp(-e.deltaY * speed)));
         this.center = add(this.center, sub(before, this.toWorld(s)));
         this.draw();
       },
@@ -337,7 +381,8 @@ export class PlanView {
     const picked = p.furniture.find((f) => this.isSelected('furniture', f.id));
     if (picked) this.drawFurniture(picked, true);
     for (const r of p.rooms) this.drawRoomLabel(r.name, r.points);
-    for (const wall of p.walls) this.drawLength(wall.a, wall.b);
+    const houseCenter = centerOf(p);
+    for (const wall of p.walls) this.drawLength(wall.a, wall.b, houseCenter);
     this.drawDraft(p);
   }
 
@@ -488,16 +533,20 @@ export class PlanView {
     }
   }
 
-  private drawLength(a: Vec2, b: Vec2): void {
+  private drawLength(a: Vec2, b: Vec2, houseCenter?: Vec2): void {
     if (this.zoom < 25) return;
     const mid = this.toScreen(scale(add(a, b), 0.5));
     const dir = normalize(sub(b, a));
-    const n = { x: -dir.y, y: dir.x };
+    // wall labels sit outside the house so they never cover furniture
+    const n = houseCenter ? labelSide(a, b, houseCenter) : { x: -dir.y, y: dir.x };
     const { ctx } = this;
     ctx.fillStyle = COLORS.label;
     ctx.font = '11px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(formatLength(dist(a, b)), mid.x + n.x * 16, mid.y + n.y * 16 + 4);
+    // anchor the text on the side facing away from the wall so it never overlaps the wall line
+    ctx.textAlign = n.x > 0.5 ? 'left' : n.x < -0.5 ? 'right' : 'center';
+    const gap = 12;
+    const baseline = n.y > 0.5 ? 10 : n.y < -0.5 ? -2 : 4;
+    ctx.fillText(formatLength(dist(a, b)), mid.x + n.x * gap, mid.y + n.y * gap + baseline);
   }
 
   private drawCorners(p: Project): void {
@@ -567,6 +616,12 @@ export class PlanView {
       ctx.fill();
     }
   }
+}
+
+function centerOf(p: Project): Vec2 | undefined {
+  if (!p.walls.length) return undefined;
+  const pts = p.walls.flatMap((w) => [w.a, w.b]);
+  return scale(pts.reduce(add, { x: 0, y: 0 }), 1 / pts.length);
 }
 
 export function isTextField(t: EventTarget | null): boolean {
