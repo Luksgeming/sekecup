@@ -1,8 +1,11 @@
 import { dist } from '../geometry/vec';
+import { polygonArea } from '../geometry/polygon';
 import { WALL_DEFAULTS, type Failure, type Opening, type Project, type Vec2, type Wall } from './types';
 
 const MIN_WALL_LENGTH = 0.01;
 const EPS = 1e-9;
+const MIN_ROOM_AREA = 0.01;
+const CORNER_EPS = 0.001;
 
 const newId = () => crypto.randomUUID();
 
@@ -58,8 +61,12 @@ export function removeOpening(p: Project, id: string): Project {
 }
 
 export function addRoom(p: Project, name: string, points: Vec2[]): Project | Failure {
-  if (points.length < 3) return { error: 'Ruangan butuh minimal 3 titik' };
-  return { ...p, rooms: [...p.rooms, { id: newId(), name, points }] };
+  // drop repeated clicks on the same spot, including a last point equal to the first
+  const clean = points.filter((pt, i) => dist(pt, points[(i + points.length - 1) % points.length]) > CORNER_EPS || i === 0);
+  if (clean.length > 1 && dist(clean[0], clean.at(-1)!) <= CORNER_EPS) clean.pop();
+  if (clean.length < 3) return { error: 'Ruangan butuh minimal 3 titik' };
+  if (polygonArea(clean) < MIN_ROOM_AREA) return { error: 'Ruangan tidak punya luas' };
+  return { ...p, rooms: [...p.rooms, { id: newId(), name, points: clean }] };
 }
 
 export function removeRoom(p: Project, id: string): Project {
@@ -117,7 +124,6 @@ export function renameRoom(p: Project, id: string, name: string): Project | Fail
   return { ...p, rooms: p.rooms.map((r) => (r.id === id ? { ...r, name: trimmed } : r)) };
 }
 
-const CORNER_EPS = 0.001;
 const atCorner = (v: Vec2, c: Vec2) => dist(v, c) <= CORNER_EPS;
 
 export function cornerAt(p: Project, at: Vec2, radius = 0.2): Vec2 | undefined {

@@ -7,6 +7,8 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
+      // registered from main.ts, and only outside the desktop app
+      injectRegister: null,
       includeAssets: ['favicon.svg', 'icon.svg'],
       manifest: {
         name: 'REA',

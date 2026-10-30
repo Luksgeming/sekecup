@@ -16,6 +16,8 @@ export type ToolResult = {
   state: ToolState;
   project: Project;
   message?: string;
+  /** Set by handleKey: whether the key did anything (so the app can let unused keys through). */
+  handled?: boolean;
   /** A finished room outline still waiting for its name (when no promptName is given). */
   pendingRoom?: { points: Vec2[]; suggested: string };
 };
@@ -61,12 +63,11 @@ export function handleClick(
       const wall = nearestWall(project, world);
       if (!wall) return { state, project };
       const defaults = state.tool === 'door' ? DOOR_DEFAULTS : WINDOW_DEFAULTS;
-      const r = addOpening(project, {
-        wallId: wall.id,
-        type: state.tool,
-        offset: projectOnWall(wall, world).offset,
-        ...defaults,
-      });
+      // a click near a corner slides the opening inward instead of failing
+      const half = defaults.width / 2;
+      const len = dist(wall.a, wall.b);
+      const offset = Math.min(Math.max(projectOnWall(wall, world).offset, half), len - half);
+      const r = addOpening(project, { wallId: wall.id, type: state.tool, offset, ...defaults });
       return 'error' in r ? { state, project, message: r.error } : { state, project: r };
     }
 
@@ -103,15 +104,18 @@ export function handleLengthInput(
 }
 
 export function handleKey(state: ToolState, project: Project, key: string, ctx: ToolContext = {}): ToolResult {
-  if (key === 'Escape') return { state: { ...state, draft: [], selected: undefined }, project };
-  if (key === 'Enter' && state.tool === 'room') return finishRoom(state, project, ctx);
+  if (key === 'Escape') {
+    const busy = state.draft.length > 0 || state.selected !== undefined;
+    return { state: { ...state, draft: [], selected: undefined }, project, handled: busy };
+  }
+  if (key === 'Enter' && state.tool === 'room' && state.draft.length) return { ...finishRoom(state, project, ctx), handled: true };
   if ((key === 'Delete' || key === 'Backspace') && state.selected) {
     const { kind, id } = state.selected;
     const next =
       kind === 'wall' ? removeWall(project, id) : kind === 'opening' ? removeOpening(project, id) : removeRoom(project, id);
-    return { state: { ...state, selected: undefined }, project: next };
+    return { state: { ...state, selected: undefined }, project: next, handled: true };
   }
-  return { state, project };
+  return { state, project, handled: false };
 }
 
 /** Drops a selection whose object was removed, e.g. by undo. */

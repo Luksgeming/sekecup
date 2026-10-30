@@ -150,3 +150,24 @@ describe('typed wall length', () => {
     expect(handleLengthInput(wallState(), p, { x: 1, y: 0 }, 2, noMods).project).toBe(p);
   });
 });
+
+describe('polish', () => {
+  it('slides a door clicked near a corner inward until it fits', () => {
+    const r = handleClick({ ...initialToolState(), tool: 'door' }, box(), { x: 0.2, y: 0 }, noMods);
+    expect(r.project.openings[0].offset).toBeCloseTo(0.45);
+  });
+
+  it('reports Enter as unhandled for the wall tool', () => {
+    expect(handleKey(wallState(), emptyProject(), 'Enter').handled).toBe(false);
+  });
+
+  it('reports Delete as unhandled with nothing selected', () => {
+    expect(handleKey({ ...initialToolState(), tool: 'select' }, box(), 'Delete').handled).toBe(false);
+  });
+
+  it('reports Delete as handled when something is deleted', () => {
+    const p = box();
+    const s: ToolState = { ...initialToolState(), tool: 'select', selected: { kind: 'wall', id: p.walls[0].id } };
+    expect(handleKey(s, p, 'Delete').handled).toBe(true);
+  });
+});

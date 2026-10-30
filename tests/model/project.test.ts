@@ -217,3 +217,14 @@ describe('cornerAt', () => {
     expect(cornerAt(p, { x: 2, y: 0 })).toBeUndefined();
   });
 });
+
+describe('room cleanup', () => {
+  it('drops repeated consecutive points', () => {
+    const p = addRoom(emptyProject(), 'Kamar', [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }, { x: 0, y: 0 }]) as Project;
+    expect(p.rooms[0].points).toEqual([{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }]);
+  });
+
+  it('rejects a room with no area', () => {
+    expect(addRoom(emptyProject(), 'Garis', [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 4, y: 0 }])).toHaveProperty('error');
+  });
+});

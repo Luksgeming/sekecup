@@ -64,8 +64,9 @@ export class PlanView {
 
   /** Runs a key through the active tool; returns true when it was handled. */
   key(key: string): boolean {
-    if (!['Escape', 'Enter', 'Delete', 'Backspace'].includes(key)) return false;
-    this.applyResult(handleKey(this.state, this.store.project, key));
+    const r = handleKey(this.state, this.store.project, key);
+    if (!r.handled) return false;
+    this.applyResult(r);
     return true;
   }
 

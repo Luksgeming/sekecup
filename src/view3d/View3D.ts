@@ -8,6 +8,7 @@ export class View3D {
   private camera: THREE.PerspectiveCamera;
   private controls: OrbitControls;
   private house: THREE.Group;
+  private sun: THREE.DirectionalLight;
   private frame = 0;
   // keep re-framing the house until the user moves the camera themselves
   private autoFit = true;
@@ -37,11 +38,11 @@ export class View3D {
 
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0xb9ad94, 1.6));
     const sun = new THREE.DirectionalLight(0xffffff, 2.2);
-    sun.position.set(-10, 18, 8);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
-    Object.assign(sun.shadow.camera, { left: -25, right: 25, top: 25, bottom: -25 });
-    this.scene.add(sun);
+    this.scene.add(sun, sun.target);
+    this.sun = sun;
+    this.aimSun(new THREE.Vector3(4, 0, 3), 25);
 
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(200, 200),
@@ -87,11 +88,21 @@ export class View3D {
     if (box.isEmpty()) return;
     const center = box.getCenter(new THREE.Vector3());
     const radius = Math.max(box.getSize(new THREE.Vector3()).length() / 2, 2);
+    this.aimSun(center, radius);
     const distance = radius / Math.sin(THREE.MathUtils.degToRad(this.camera.fov / 2));
     this.controls.target.copy(center);
     this.camera.position.copy(center).add(new THREE.Vector3(-0.5, 0.8, 1).normalize().multiplyScalar(distance));
     this.controls.update();
     this.requestRender();
+  }
+
+  /** Keeps the shadow area just big enough for the house, so big plots still get shadows. */
+  private aimSun(center: THREE.Vector3, radius: number): void {
+    const r = radius + 4;
+    this.sun.target.position.copy(center);
+    this.sun.position.copy(center).add(new THREE.Vector3(-0.45, 0.8, 0.35).normalize().multiplyScalar(r * 2));
+    Object.assign(this.sun.shadow.camera, { left: -r, right: r, top: r, bottom: -r, near: 0.5, far: r * 4 });
+    this.sun.shadow.camera.updateProjectionMatrix();
   }
 
   private resize(): void {

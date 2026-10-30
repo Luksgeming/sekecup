@@ -1,4 +1,5 @@
 import './style.css';
+import { registerSW } from 'virtual:pwa-register';
 import { emptyProject, isEmptyProject } from './model/project';
 import { Store } from './model/store';
 import { isTextField, PlanView } from './plan/PlanView';
@@ -162,10 +163,21 @@ window.addEventListener('keydown', (e) => {
   if (tool) plan.setTool(tool);
 });
 
-startAutosave(store).then(({ ok }) => {
-  if (ok) return;
+function showStorageBanner(): void {
+  if (document.querySelector('#banner')) return;
   const banner = document.createElement('div');
   banner.id = 'banner';
-  banner.textContent = 'Tidak tersimpan otomatis di browser ini. Gunakan "Simpan File" agar gambar tidak hilang.';
+  banner.textContent = 'Tidak tersimpan otomatis di perangkat ini. Gunakan "Simpan File" agar gambar tidak hilang.';
   document.body.insertBefore(banner, document.querySelector('#views'));
+}
+
+startAutosave(store, undefined, { onWriteError: showStorageBanner }).then(({ ok, flush }) => {
+  if (!ok) showStorageBanner();
+  // save right away when the tab or window goes away, instead of waiting for the timer
+  window.addEventListener('pagehide', () => void flush());
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') void flush();
+  });
 });
+
+if (!('__TAURI_INTERNALS__' in window)) registerSW({ immediate: true });
