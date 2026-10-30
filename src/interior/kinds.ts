@@ -3,7 +3,7 @@
 // w = width along x, d = depth along y on the plan, h = height. `rotation` turns
 // the model (degrees) so its front faces +y on the plan.
 
-export type FurnitureCategory = 'Kamar' | 'Ruang tamu' | 'Makan' | 'Dapur' | 'Kerja' | 'Tanaman' | 'Lampu';
+export type FurnitureCategory = 'Kamar' | 'Ruang tamu' | 'Makan' | 'Dapur' | 'Kerja' | 'Tanaman' | 'Lampu & kipas';
 
 export type FurnitureSpec = {
   label: string;
@@ -74,14 +74,14 @@ export const FURNITURE = {
   'rak-putih': { label: 'Rak buku putih', category: 'Kerja', model: 'Shelf_01', rotation: 0, size: { w: 1.0, d: 0.26, h: 2.08 } },
   'rak-besi-ramping': { label: 'Rak besi ramping', category: 'Kerja', model: 'steel_frame_shelves_02', rotation: 0, size: { w: 0.59, d: 0.5, h: 2.14 } },
   'sukulen': { label: 'Sukulen kecil', category: 'Tanaman', model: 'potted_plant_04', rotation: 0, size: { w: 0.17, d: 0.18, h: 0.27 } },
-  'lampu-gantung': { label: 'Lampu gantung modern', category: 'Lampu', model: 'modern_ceiling_lamp_01', rotation: 0, size: { w: 0.43, d: 0.43, h: 0.95 }, mount: 'ceiling' },
-  'kandelir': { label: 'Kandelir klasik', category: 'Lampu', model: 'Chandelier_01', rotation: 0, size: { w: 0.75, d: 0.82, h: 0.8 }, mount: 'ceiling' },
-  'kandelir-tudung': { label: 'Kandelir bertudung', category: 'Lampu', model: 'Chandelier_02', rotation: 0, size: { w: 0.68, d: 0.62, h: 0.85 }, mount: 'ceiling' },
-  'kandelir-besar': { label: 'Kandelir besar', category: 'Lampu', model: 'Chandelier_03', rotation: 0, size: { w: 0.78, d: 0.79, h: 1.04 }, mount: 'ceiling' },
-  'lampu-lentera': { label: 'Lampu lentera', category: 'Lampu', model: 'lantern_chandelier_01', rotation: 0, size: { w: 0.58, d: 0.57, h: 0.88 }, mount: 'ceiling' },
-  'lampu-industri': { label: 'Lampu gantung industrial', category: 'Lampu', model: 'hanging_industrial_lamp', rotation: 0, size: { w: 0.55, d: 0.55, h: 1.35 }, mount: 'ceiling' },
-  'lampu-panjang': { label: 'Lampu gantung panjang', category: 'Lampu', model: 'caged_hanging_light', rotation: 0, size: { w: 1.16, d: 0.32, h: 0.75 }, mount: 'ceiling' },
-  'kipas-plafon': { label: 'Kipas angin plafon', category: 'Lampu', model: 'ceiling_fan', rotation: 0, size: { w: 1.46, d: 1.46, h: 0.52 }, mount: 'ceiling' },
+  'lampu-gantung': { label: 'Lampu gantung modern', category: 'Lampu & kipas', model: 'modern_ceiling_lamp_01', rotation: 0, size: { w: 0.43, d: 0.43, h: 0.95 }, mount: 'ceiling' },
+  'kandelir': { label: 'Kandelir klasik', category: 'Lampu & kipas', model: 'Chandelier_01', rotation: 0, size: { w: 0.75, d: 0.82, h: 0.8 }, mount: 'ceiling' },
+  'kandelir-tudung': { label: 'Kandelir bertudung', category: 'Lampu & kipas', model: 'Chandelier_02', rotation: 0, size: { w: 0.68, d: 0.62, h: 0.85 }, mount: 'ceiling' },
+  'kandelir-besar': { label: 'Kandelir besar', category: 'Lampu & kipas', model: 'Chandelier_03', rotation: 0, size: { w: 0.78, d: 0.79, h: 1.04 }, mount: 'ceiling' },
+  'lampu-lentera': { label: 'Lampu lentera', category: 'Lampu & kipas', model: 'lantern_chandelier_01', rotation: 0, size: { w: 0.58, d: 0.57, h: 0.88 }, mount: 'ceiling' },
+  'lampu-industri': { label: 'Lampu gantung industrial', category: 'Lampu & kipas', model: 'hanging_industrial_lamp', rotation: 0, size: { w: 0.55, d: 0.55, h: 1.35 }, mount: 'ceiling' },
+  'lampu-panjang': { label: 'Lampu gantung panjang', category: 'Lampu & kipas', model: 'caged_hanging_light', rotation: 0, size: { w: 1.16, d: 0.32, h: 0.75 }, mount: 'ceiling' },
+  'kipas-plafon': { label: 'Kipas angin plafon', category: 'Lampu & kipas', model: 'ceiling_fan', rotation: 0, size: { w: 1.46, d: 1.46, h: 0.52 }, mount: 'ceiling' },
 } satisfies Record<string, FurnitureSpec>;
 
 /** Kinds from older versions that have no realistic model; files that use them drop those pieces. */

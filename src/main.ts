@@ -1,6 +1,7 @@
 import './style.css';
 import { registerSW } from 'virtual:pwa-register';
-import { emptyProject, isEmptyProject } from './model/project';
+import { emptyProject, isEmptyProject, roomAt } from './model/project';
+import { hangsFromCeiling } from './interior/kinds';
 import { Store } from './model/store';
 import { isTextField, PlanView } from './plan/PlanView';
 import type { ToolName } from './plan/tools';
@@ -35,7 +36,10 @@ const view3d = new View3D(document.querySelector<HTMLElement>('#view3d-pane')!, 
   currentRoom: () => {
     const sel = plan.toolState.selected;
     const p = store.project;
-    return (sel?.kind === 'room' ? p.rooms.find((r) => r.id === sel.id) : undefined) ?? p.rooms[0];
+    if (sel?.kind === 'room') return p.rooms.find((r) => r.id === sel.id);
+    // a selected piece of furniture: the room it stands in
+    const item = sel?.kind === 'furniture' ? p.furniture.find((f) => f.id === sel.id) : undefined;
+    return (item && roomAt(p, item)) || p.rooms[0];
   },
   message: (msg) => toast(msg),
 });
@@ -125,7 +129,13 @@ function redo(): void {
   store.redo();
 }
 
-const catalog = createCatalogPanel(document.querySelector<HTMLElement>('#plan-pane')!, (kind) => plan.placeFurniture(kind));
+const catalog = createCatalogPanel(document.querySelector<HTMLElement>('#plan-pane')!, (kind) => {
+  plan.placeFurniture(kind);
+  // lamps and fans hang from the ceiling, which the default 3D view hides to show the rooms
+  if (hangsFromCeiling(kind) && view3d.wallsAreLow) {
+    toast('Lampu dan kipas plafon terlihat di 3D dengan "Dinding: penuh" atau "Lihat dari dalam".');
+  }
+});
 
 function chooseTool(t: ToolName): void {
   if (t === 'furniture') {

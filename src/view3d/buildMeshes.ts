@@ -4,7 +4,7 @@ import { dist, normalize, sub } from '../geometry/vec';
 import { wallBoxes } from '../geometry/wallBoxes';
 import { furnitureObject } from '../interior/models';
 import { FURNITURE, hangsFromCeiling } from '../interior/kinds';
-import { ceilingHeight } from '../model/project';
+import { ceilingAt, roomCeilingHeight } from '../model/project';
 import { floorMaterial } from '../interior/floorTextures';
 
 const GLASS = new THREE.MeshStandardMaterial({ color: 0x9cc8e8, transparent: true, opacity: 0.35, roughness: 0.1 });
@@ -60,7 +60,6 @@ export function buildMeshes(p: Project, { wallCut = Infinity }: BuildOptions = {
 
   // with cut walls the ceiling and everything hanging from it stay hidden, so the rooms show from above
   const showCeiling = !Number.isFinite(wallCut);
-  const top = ceilingHeight(p);
   if (showCeiling) {
     for (const room of p.rooms) {
       const shape = new THREE.Shape(room.points.map((pt) => new THREE.Vector2(pt.x, pt.y)));
@@ -68,7 +67,9 @@ export function buildMeshes(p: Project, { wallCut = Infinity }: BuildOptions = {
       // shape lies in x/y; turning it +90° about x maps y→z and points its face down (-y),
       // so it is seen from inside the room and invisible from above
       mesh.rotation.x = Math.PI / 2;
-      mesh.position.y = top;
+      mesh.position.y = roomCeilingHeight(p, room);
+      // the ceiling also shades the room from the sun
+      mesh.castShadow = true;
       mesh.userData = { kind: 'ceiling', id: room.id };
       group.add(mesh);
     }
@@ -78,7 +79,9 @@ export function buildMeshes(p: Project, { wallCut = Infinity }: BuildOptions = {
     const hanging = hangsFromCeiling(f.kind);
     if (hanging && !showCeiling) continue;
     const item = furnitureObject(f.kind);
-    item.position.set(f.x, hanging ? top - FURNITURE[f.kind].size.h : 0, f.y);
+    // a hanging piece taller than its room still keeps its bottom above the floor
+    const y = hanging ? Math.max(0, ceilingAt(p, f) - FURNITURE[f.kind].size.h) : 0;
+    item.position.set(f.x, y, f.y);
     // plan rotation is clockwise on screen (y down), which is -y in three.js
     item.rotation.y = -(f.rotation * Math.PI) / 180;
     item.userData = { kind: 'furniture', id: f.id };

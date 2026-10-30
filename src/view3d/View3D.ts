@@ -5,6 +5,7 @@ import type { Store } from '../model/store';
 import type { Room, Vec2 } from '../model/types';
 import { buildMeshes, disposeGroup } from './buildMeshes';
 import { floorPoint } from './floorPoint';
+import { pointInPolygon } from '../geometry/polygon';
 import { isModelReady, loadModels, onModelLoaded } from '../interior/models';
 
 const LOW_WALL_HEIGHT = 1.2;
@@ -37,7 +38,8 @@ export class View3D {
   private lowWalls = true;
   private selectedId?: string;
   private highlight?: THREE.BoxHelper;
-  private press?: { pointerId: number; x: number; y: number; shift: boolean; itemId?: string; grab?: Vec2; moved: boolean };
+  // planeY: the height the grabbed piece is dragged at (0 for the floor, higher for hanging lamps)
+  private press?: { pointerId: number; x: number; y: number; shift: boolean; itemId?: string; grab?: Vec2; planeY: number; moved: boolean };
   private bar: HTMLElement;
   private hint: HTMLElement;
   private raycaster = new THREE.Raycaster();
@@ -48,6 +50,7 @@ export class View3D {
   private wallToggle: HTMLButtonElement;
   private insideToggle: HTMLButtonElement;
   private inside = false;
+  private wallsBeforeInside = true;
   readonly scene = new THREE.Scene();
 
   private hooks: View3DHooks;
@@ -156,8 +159,12 @@ export class View3D {
       this.hooks.message('Buat ruangan dulu (alat Ruangan) untuk melihat dari dalam.');
       return;
     }
-    const c = room.points.reduce((s, p) => ({ x: s.x + p.x / room.points.length, y: s.y + p.y / room.points.length }), { x: 0, y: 0 });
-    const maxY = Math.max(...room.points.map((p) => p.y));
+    const c = insidePoint(room.points);
+    const xs = room.points.map((p) => p.x);
+    const ys = room.points.map((p) => p.y);
+    const maxY = Math.max(...ys);
+    const halfDiagonal = Math.hypot(Math.max(...xs) - Math.min(...xs), maxY - Math.min(...ys)) / 2;
+    if (!this.inside) this.wallsBeforeInside = this.lowWalls;
     this.inside = true;
     this.autoFit = false;
     this.setLowWalls(false);
@@ -167,7 +174,9 @@ export class View3D {
     this.camera.position.set(c.x, EYE_HEIGHT, c.y + (maxY - c.y) * 0.8);
     this.controls.target.set(c.x, 1.2, c.y);
     this.controls.minDistance = 0.3;
-    this.controls.maxPolarAngle = Math.PI - 0.05;
+    // stay inside the room: no further back than its half-diagonal, never below the floor
+    this.controls.maxDistance = Math.max(halfDiagonal, 1);
+    this.controls.maxPolarAngle = Math.PI * 0.8;
     this.insideToggle.textContent = 'Lihat dari luar';
     this.hint.textContent = 'Seret: berputar di dalam ruangan · Scroll: maju/mundur · Klik lantai untuk menaruh furnitur';
     this.controls.update();
@@ -175,15 +184,26 @@ export class View3D {
   }
 
   lookOutside(): void {
+    this.leaveInside();
+    this.fit();
+  }
+
+  /** Puts the outside-view camera settings back; fit() calls it too, so no button leaves them behind. */
+  private leaveInside(): void {
+    if (!this.inside) return;
     this.inside = false;
     this.camera.fov = 45;
     this.camera.updateProjectionMatrix();
     this.controls.minDistance = 0;
+    this.controls.maxDistance = Infinity;
     this.controls.maxPolarAngle = Math.PI / 2 - 0.02;
     this.insideToggle.textContent = 'Lihat dari dalam';
     this.hint.textContent = OUTSIDE_HINT;
-    this.setLowWalls(true);
-    this.fit();
+    this.setLowWalls(this.wallsBeforeInside);
+  }
+
+  get wallsAreLow(): boolean {
+    return this.lowWalls;
   }
 
   /** Highlights the selected furniture, or nothing. */
@@ -196,6 +216,7 @@ export class View3D {
 
   /** Points the camera at the whole house. */
   fit(): void {
+    this.leaveInside();
     this.autoFit = true;
     const box = new THREE.Box3().setFromObject(this.house);
     if (box.isEmpty()) return;
@@ -248,16 +269,17 @@ export class View3D {
     return this.raycaster;
   }
 
-  private floorAt(e: PointerEvent): Vec2 | undefined {
+  private floorAt(e: PointerEvent, height = 0): Vec2 | undefined {
     const { origin, direction } = this.ray(e).ray;
-    return floorPoint(origin, direction);
+    return floorPoint(origin, direction, height);
   }
 
-  private furnitureHit(e: PointerEvent): string | undefined {
+  /** The piece under the pointer and the height it was hit at. */
+  private furnitureHit(e: PointerEvent): { id: string; height: number } | undefined {
     for (const hit of this.ray(e).intersectObjects(this.house.children, true)) {
       let o: THREE.Object3D | null = hit.object;
       while (o && o.userData.kind !== 'furniture') o = o.parent;
-      if (o) return o.userData.id as string;
+      if (o) return { id: o.userData.id as string, height: hit.point.y };
       // a wall or floor in front of the furniture hides it
       if (hit.object.userData.kind === 'wall') return undefined;
     }
@@ -282,13 +304,15 @@ export class View3D {
           return;
         }
         if (e.button !== 0) return;
-        const itemId = e.shiftKey || this.hooks.isPlacing() ? undefined : this.furnitureHit(e);
-        const item = itemId ? this.store.project.furniture.find((f) => f.id === itemId) : undefined;
-        const at = this.floorAt(e);
-        this.press = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, shift: e.shiftKey, moved: false };
-        if (item && at) {
+        const hit = e.shiftKey || this.hooks.isPlacing() ? undefined : this.furnitureHit(e);
+        const item = hit ? this.store.project.furniture.find((f) => f.id === hit.id) : undefined;
+        this.press = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, shift: e.shiftKey, planeY: 0, moved: false };
+        if (item && hit) {
+          // drag on the plane where the piece was grabbed, so a lamp follows the cursor at ceiling height
+          const at = this.floorAt(e, hit.height);
           this.press.itemId = item.id;
-          this.press.grab = { x: at.x - item.x, y: at.y - item.y };
+          this.press.planeY = hit.height;
+          this.press.grab = at ? { x: at.x - item.x, y: at.y - item.y } : { x: 0, y: 0 };
           this.controls.enabled = false;
           el.setPointerCapture(e.pointerId);
         }
@@ -301,7 +325,7 @@ export class View3D {
       if (!p || e.pointerId !== p.pointerId) return;
       if (!p.moved && Math.hypot(e.clientX - p.x, e.clientY - p.y) > DRAG_THRESHOLD_PX) p.moved = true;
       if (!p.moved || !p.itemId) return;
-      const at = this.floorAt(e);
+      const at = this.floorAt(e, p.planeY);
       const obj = this.furnitureObject(p.itemId);
       if (!at || !obj) return;
       obj.position.x = snap(at.x - p.grab!.x);
@@ -379,6 +403,14 @@ export class View3D {
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
+}
+
+/** A point inside the room to stand at: the corner average when it falls inside, otherwise the middle of the first corner triangle. */
+function insidePoint(points: Vec2[]): Vec2 {
+  const avg = points.reduce((s, p) => ({ x: s.x + p.x / points.length, y: s.y + p.y / points.length }), { x: 0, y: 0 });
+  if (pointInPolygon(avg, points)) return avg;
+  const [a, b, c] = points;
+  return { x: (a.x + b.x + c.x) / 3, y: (a.y + b.y + c.y) / 3 };
 }
 
 const snap = (v: number) => +(Math.round(v / FURNITURE_GRID) * FURNITURE_GRID).toFixed(3);

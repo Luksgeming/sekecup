@@ -1,4 +1,4 @@
-import { FURNITURE } from '../interior/kinds';
+import { FURNITURE, hangsFromCeiling } from '../interior/kinds';
 import type { Furniture, Project, Vec2 } from '../model/types';
 import { pointInPolygon, polygonArea } from './polygon';
 
@@ -21,9 +21,14 @@ export function footprint(f: Furniture): Vec2[] {
  * sofa standing on a rug stays clickable; among equal sizes the last placed wins.
  */
 export function furnitureAt(p: Project, at: Vec2): Furniture | undefined {
+  // things on the floor win over lamps hanging above them
+  return pick(p.furniture.filter((f) => !hangsFromCeiling(f.kind)), at) ?? pick(p.furniture.filter((f) => hangsFromCeiling(f.kind)), at);
+}
+
+function pick(items: Furniture[], at: Vec2): Furniture | undefined {
   let best: Furniture | undefined;
   let bestArea = Infinity;
-  for (const f of p.furniture) {
+  for (const f of items) {
     const corners = footprint(f);
     const area = polygonArea(corners);
     if (area <= bestArea && pointInPolygon(at, corners)) {
@@ -37,5 +42,7 @@ export function furnitureAt(p: Project, at: Vec2): Furniture | undefined {
 /** Drawing order for the plan: bigger pieces first, so a plant on a table stays visible. */
 export function drawOrder(items: Furniture[]): Furniture[] {
   const area = (f: Furniture) => FURNITURE[f.kind].size.w * FURNITURE[f.kind].size.d;
-  return [...items].sort((a, b) => area(b) - area(a));
+  // overhead pieces go on top, as drafting convention draws what is above
+  const level = (f: Furniture) => (hangsFromCeiling(f.kind) ? 1 : 0);
+  return [...items].sort((a, b) => level(a) - level(b) || area(b) - area(a));
 }

@@ -1,9 +1,9 @@
 import { dist } from '../geometry/vec';
-import { polygonArea } from '../geometry/polygon';
+import { pointInPolygon, polygonArea } from '../geometry/polygon';
 import { isFloorMaterial, isHexColor } from '../interior/kinds';
 
 const FURNITURE_COLOR = '#b9b2a3';
-import { ROOM_DEFAULTS, WALL_DEFAULTS, type Failure, type FloorMaterial, type FurnitureKind, type Opening, type Project, type Vec2, type Wall } from './types';
+import { ROOM_DEFAULTS, WALL_DEFAULTS, type Failure, type FloorMaterial, type FurnitureKind, type Opening, type Project, type Room, type Vec2, type Wall } from './types';
 
 const MIN_WALL_LENGTH = 0.01;
 const EPS = 1e-9;
@@ -254,7 +254,31 @@ export function setRoomCeiling(p: Project, id: string, color: string): Project |
   return { ...p, rooms: p.rooms.map((r) => (r.id === id ? { ...r, ceilingColor: color } : r)) };
 }
 
-/** Ceiling height of the house: its tallest wall, or the default wall height when there are none. */
-export function ceilingHeight(p: Project): number {
-  return p.walls.length ? Math.max(...p.walls.map((w) => w.height)) : WALL_DEFAULTS.height;
+const ROOM_WALL_REACH = 0.3;
+
+const distToSegment = (p: Vec2, a: Vec2, b: Vec2) => {
+  const abx = b.x - a.x;
+  const aby = b.y - a.y;
+  const len2 = abx * abx + aby * aby || 1;
+  const t = Math.min(1, Math.max(0, ((p.x - a.x) * abx + (p.y - a.y) * aby) / len2));
+  return dist(p, { x: a.x + abx * t, y: a.y + aby * t });
+};
+
+/** Ceiling height of a room: its tallest surrounding wall, or the default wall height. */
+export function roomCeilingHeight(p: Project, room: Room): number {
+  const pts = room.points;
+  const onOutline = (v: Vec2) => pts.some((a, i) => distToSegment(v, a, pts[(i + 1) % pts.length]) <= ROOM_WALL_REACH);
+  const around = p.walls.filter((w) => onOutline(w.a) && onOutline(w.b));
+  return around.length ? Math.max(...around.map((w) => w.height)) : WALL_DEFAULTS.height;
+}
+
+/** Ceiling height above a plan point: from the smallest room containing it, else the default. */
+export function ceilingAt(p: Project, at: Vec2): number {
+  const room = roomAt(p, at);
+  return room ? roomCeilingHeight(p, room) : WALL_DEFAULTS.height;
+}
+
+/** The smallest room containing a plan point. */
+export function roomAt(p: Project, at: Vec2): Room | undefined {
+  return [...p.rooms].sort((a, b) => polygonArea(a.points) - polygonArea(b.points)).find((r) => pointInPolygon(at, r.points));
 }

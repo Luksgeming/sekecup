@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { emptyProject, addWall, removeWall, addOpening, addRoom, removeOpening, removeRoom, isEmptyProject, updateWall, updateOpening, renameRoom, moveCorner, cornerAt } from '../../src/model/project';
+import { emptyProject, addWall, removeWall, addOpening, addRoom, removeOpening, removeRoom, isEmptyProject, updateWall, updateOpening, renameRoom, moveCorner, cornerAt, roomCeilingHeight, ceilingAt } from '../../src/model/project';
 import type { Project } from '../../src/model/types';
 
 function withWall(): Project {
@@ -249,5 +249,36 @@ describe('review fixes 1.5', () => {
     const p = withWall();
     expect(updateWall(p, p.walls[0].id, { thickness: 20 })).toHaveProperty('error');
     expect(updateWall(p, p.walls[0].id, { height: 50 })).toHaveProperty('error');
+  });
+});
+
+describe('ceiling height per room', () => {
+  // two rooms side by side: a 2.8 m bedroom and a 3.5 m hall
+  function house(): Project {
+    let p = emptyProject();
+    const add = (a: [number, number], b: [number, number]) => (p = addWall(p, { x: a[0], y: a[1] }, { x: b[0], y: b[1] }));
+    add([0, 0], [4, 0]); add([4, 0], [4, 3]); add([4, 3], [0, 3]); add([0, 3], [0, 0]);
+    add([4, 0], [8, 0]); add([8, 0], [8, 3]); add([8, 3], [4, 3]);
+    for (const w of p.walls.slice(4)) p = updateWall(p, w.id, { height: 3.5 }) as Project;
+    p = addRoom(p, 'Kamar', [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }, { x: 0, y: 3 }]) as Project;
+    return addRoom(p, 'Aula', [{ x: 4, y: 0 }, { x: 8, y: 0 }, { x: 8, y: 3 }, { x: 4, y: 3 }]) as Project;
+  }
+
+  it('uses the walls around the room, not the tallest wall in the house', () => {
+    const p = house();
+    expect(roomCeilingHeight(p, p.rooms[0])).toBeCloseTo(2.8);
+    expect(roomCeilingHeight(p, p.rooms[1])).toBeCloseTo(3.5);
+  });
+
+  it('falls back to the default height for a room without walls', () => {
+    const p = addRoom(emptyProject(), 'Teras', [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 2 }]) as Project;
+    expect(roomCeilingHeight(p, p.rooms[0])).toBeCloseTo(2.8);
+  });
+
+  it('finds the ceiling over a point from the room it is in', () => {
+    const p = house();
+    expect(ceilingAt(p, { x: 2, y: 1 })).toBeCloseTo(2.8);
+    expect(ceilingAt(p, { x: 6, y: 1 })).toBeCloseTo(3.5);
+    expect(ceilingAt(p, { x: 20, y: 20 })).toBeCloseTo(2.8);
   });
 });

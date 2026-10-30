@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { footprint, furnitureAt } from '../../src/geometry/footprint';
+import { drawOrder, footprint, furnitureAt } from '../../src/geometry/footprint';
 import { addFurniture, emptyProject, updateFurniture } from '../../src/model/project';
 import type { Project } from '../../src/model/types';
 
@@ -51,5 +51,24 @@ describe('furnitureAt with overlapping pieces', () => {
     let p = addFurniture(emptyProject(), 'tanaman-daun', { x: 0, y: 0 });
     p = addFurniture(p, 'meja-kerja', { x: 0, y: 0 });
     expect(furnitureAt(p, { x: 0.1, y: 0 })?.kind).toBe('tanaman-daun');
+  });
+});
+
+describe('overhead pieces', () => {
+  it('a click picks the table under a pendant lamp, not the lamp', () => {
+    let p = addFurniture(emptyProject(), 'meja-makan', { x: 0, y: 0 });
+    p = addFurniture(p, 'lampu-gantung', { x: 0, y: 0 });
+    expect(furnitureAt(p, { x: 0, y: 0 })?.kind).toBe('meja-makan');
+  });
+
+  it('a lamp with nothing under it can still be picked', () => {
+    const p = addFurniture(emptyProject(), 'lampu-gantung', { x: 0, y: 0 });
+    expect(furnitureAt(p, { x: 0, y: 0 })?.kind).toBe('lampu-gantung');
+  });
+
+  it('draws overhead pieces last', () => {
+    let p = addFurniture(emptyProject(), 'kipas-plafon', { x: 0, y: 0 });
+    p = addFurniture(p, 'meja-tamu', { x: 0, y: 0 });
+    expect(drawOrder(p.furniture).map((f) => f.kind)).toEqual(['meja-tamu', 'kipas-plafon']);
   });
 });

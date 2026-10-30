@@ -16,3 +16,13 @@ describe('floorPoint', () => {
     expect(floorPoint({ x: 0, y: 4, z: 0 }, { x: 1, y: 0.2, z: 0 })).toBeUndefined();
   });
 });
+
+describe('floorPoint at a height', () => {
+  it('meets a horizontal plane above the floor, for hanging lamps', () => {
+    expect(floorPoint({ x: 0, y: 1.6, z: 0 }, { x: 1, y: 1, z: 0 }, 2.6)).toEqual({ x: 1, y: 0 });
+  });
+
+  it('returns undefined when the ray points away from that plane', () => {
+    expect(floorPoint({ x: 0, y: 1.6, z: 0 }, { x: 1, y: -1, z: 0 }, 2.6)).toBeUndefined();
+  });
+});
