@@ -289,3 +289,20 @@ button.primary:hover:not(:disabled) { background: #a5370a; }
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 #view3d-pane canvas { touch-action: none; }
+
+.plan-zoom { position: absolute; right: 12px; bottom: 28px; display: flex; gap: 4px; }
+.plan-zoom button {
+  min-width: 32px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+.plan-hint {
+  position: absolute;
+  left: 12px;
+  bottom: 8px;
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+  pointer-events: none;
+}

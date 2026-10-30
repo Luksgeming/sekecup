@@ -10,6 +10,8 @@ import { createCatalogPanel } from './ui/catalogPanel';
 import { createAdvisor } from './ui/advisor';
 import { applyRecommendation } from './model/project';
 import { View3D } from './view3d/View3D';
+import { disposeGroup } from './view3d/buildMeshes';
+import { onModelFailure } from './interior/models';
 import { startAutosave } from './storage/autosave';
 import { parseProjectWithNotes, PROJECT_EXTENSION, serializeProject } from './io/projectFile';
 import { projectToDxf } from './io/dxf';
@@ -90,7 +92,10 @@ function exportDxf(): void {
 async function exportModel(): Promise<void> {
   let blob: Blob;
   try {
-    blob = await exportGlb(await view3d.exportModel());
+    const { group, missing } = await view3d.exportModel();
+    blob = await exportGlb(group);
+    disposeGroup(group);
+    if (missing) toast(`${missing} furnitur belum termuat dan ikut ter-export sebagai kotak. Periksa koneksi internet.`);
   } catch {
     toast('Gagal export model 3D');
     return;
@@ -180,6 +185,31 @@ function toast(msg: string): void {
   toastTimer = window.setTimeout(() => (toastEl.hidden = true), 3000);
 }
 
+// on-canvas zoom buttons, for mice whose wheel the browser reports as scrolling
+{
+  const bar = document.createElement('div');
+  bar.className = 'plan-zoom';
+  const make = (label: string, title: string, run: () => void) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    b.title = title;
+    b.setAttribute('aria-label', title);
+    b.addEventListener('mousedown', (e) => e.preventDefault());
+    b.addEventListener('click', run);
+    return b;
+  };
+  bar.append(
+    make('−', 'Perkecil', () => plan.zoomBy(1 / 1.25)),
+    make('+', 'Perbesar', () => plan.zoomBy(1.25)),
+    make('Pas', 'Tampilkan seluruh denah', () => plan.fit()),
+  );
+  const hint = document.createElement('p');
+  hint.className = 'plan-hint';
+  hint.textContent = 'Geser: seret area kosong atau dua jari · Zoom: cubit, Ctrl + scroll, atau tombol ini';
+  document.querySelector('#plan-pane')!.append(bar, hint);
+}
+
 const properties = createPropertiesPanel(document.querySelector<HTMLElement>('#plan-pane')!, store, () => plan.toolState.selected, toast);
 store.subscribe(() => properties.refresh());
 
@@ -231,8 +261,9 @@ function showStorageBanner(): void {
   document.body.insertBefore(banner, document.querySelector('#views'));
 }
 
-startAutosave(store, undefined, { onWriteError: showStorageBanner }).then(({ ok, flush }) => {
+startAutosave(store, undefined, { onWriteError: showStorageBanner }).then(({ ok, flush, dropped }) => {
   plan.fit();
+  if (dropped) toast(`${dropped} furnitur lama dihapus karena tidak ada lagi di katalog baru.`);
   if (!ok) showStorageBanner();
   // save right away when the tab or window goes away, instead of waiting for the timer
   window.addEventListener('pagehide', () => void flush());
@@ -246,3 +277,5 @@ if (!PREVIEW && !('__TAURI_INTERNALS__' in window)) registerSW({ immediate: true
 // a file dropped anywhere outside a drop zone must not navigate away from the app
 window.addEventListener('dragover', (e) => e.preventDefault());
 window.addEventListener('drop', (e) => e.preventDefault());
+
+onModelFailure(() => toast('Sebagian model furnitur gagal dimuat, jadi tampil sebagai kotak. Periksa koneksi internet.'));

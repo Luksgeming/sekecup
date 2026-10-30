@@ -8,10 +8,12 @@ import { drawOrder, footprint, furnitureAt } from '../geometry/footprint';
 import { FLOOR_MATERIALS, FURNITURE, type FurnitureKind } from '../interior/kinds';
 import { askText } from '../ui/dialog';
 import { parseLength } from '../geometry/length';
-import { labelSide, wheelAction } from './navigation';
+import { labelSide, WheelGesture } from './navigation';
 import { handleClick, handleKey, handleLengthInput, initialToolState, type Selection, nearestWall, reconcile, type ToolName, type ToolResult, type ToolState } from './tools';
 
 const DRAG_THRESHOLD_PX = 4;
+// a finger tap wobbles more than a mouse click
+const TOUCH_THRESHOLD_PX = 10;
 
 const COLORS = {
   bg: '#f7f5f0',
@@ -37,6 +39,7 @@ export class PlanView {
   // `click` is set when a press on empty space may still turn out to be a plain click
   private panning?: { start: Vec2; center: Vec2; click?: { world: Vec2; shift: boolean }; moved?: boolean };
   private spaceDown = false;
+  private wheel = new WheelGesture();
   private lengthInput?: HTMLInputElement;
   // a press on a corner or furniture becomes a drag only after the pointer really moves
   private drag?: {
@@ -85,6 +88,12 @@ export class PlanView {
 
   select(selected: Selection | undefined): void {
     this.setState({ ...this.state, tool: 'select', placing: undefined, draft: [], selected });
+  }
+
+  /** Zooms around the middle of the canvas. */
+  zoomBy(factor: number): void {
+    this.zoom = Math.min(400, Math.max(10, this.zoom * factor));
+    this.draw();
   }
 
   /** Back to the starting view: 60 px per meter, looking at the first few meters. */
@@ -270,7 +279,8 @@ export class PlanView {
     c.addEventListener('pointermove', (e) => {
       const s = this.eventPoint(e);
       if (this.panning) {
-        if (!this.panning.moved && dist(s, this.panning.start) > DRAG_THRESHOLD_PX) this.panning.moved = true;
+        const limit = e.pointerType === 'touch' ? TOUCH_THRESHOLD_PX : DRAG_THRESHOLD_PX;
+        if (!this.panning.moved && dist(s, this.panning.start) > limit) this.panning.moved = true;
         if (this.panning.moved || !this.panning.click) {
           this.center = sub(this.panning.center, scale(sub(s, this.panning.start), 1 / this.zoom));
         }
@@ -322,16 +332,15 @@ export class PlanView {
       'wheel',
       (e) => {
         e.preventDefault();
-        if (wheelAction(e) === 'pan') {
-          this.center = add(this.center, scale({ x: e.deltaX, y: e.deltaY }, 1 / this.zoom));
+        const w = this.wheel.read(e, e.timeStamp);
+        if (w.action === 'pan') {
+          this.center = add(this.center, scale({ x: w.dx, y: w.dy }, 1 / this.zoom));
           this.draw();
           return;
         }
         const s = this.eventPoint(e);
         const before = this.toWorld(s);
-        // a pinch sends small deltas, so it needs a stronger factor than a wheel notch
-        const speed = e.ctrlKey ? 0.01 : 0.0015;
-        this.zoom = Math.min(400, Math.max(10, this.zoom * Math.exp(-e.deltaY * speed)));
+        this.zoom = Math.min(400, Math.max(10, this.zoom * Math.exp(-w.dy * w.speed)));
         this.center = add(this.center, sub(before, this.toWorld(s)));
         this.draw();
       },

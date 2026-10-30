@@ -43,16 +43,38 @@ export function registerModel(kind: FurnitureKind, scene: THREE.Object3D): void 
   ready.set(kind, prepare(kind, scene));
 }
 
+export const isModelReady = (kind: FurnitureKind) => ready.has(kind);
+
+let onFailure: (() => void) | undefined;
+/** Called once when the first model fails to load (no internet, missing file). */
+export function onModelFailure(fn: () => void): void {
+  onFailure = fn;
+}
+
+// a failed model is tried again on the next use, and when the connection comes back
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    const retry = [...failed];
+    failed.clear();
+    void loadModels(retry);
+  });
+}
+
 /** Starts loading a model; resolves when it is ready (or has failed). */
 export function loadModel(kind: FurnitureKind): Promise<void> {
-  if (ready.has(kind) || failed.has(kind)) return Promise.resolve();
+  if (ready.has(kind)) return Promise.resolve();
+  failed.delete(kind);
   let p = pending.get(kind);
   if (!p) {
     loader ??= new GLTFLoader();
     p = loader
       .loadAsync(`${import.meta.env.BASE_URL}models/${FURNITURE[kind].model}.glb`)
       .then((gltf) => void ready.set(kind, prepare(kind, gltf.scene)))
-      .catch(() => void failed.add(kind))
+      .catch(() => {
+        failed.add(kind);
+        onFailure?.();
+        onFailure = undefined;
+      })
       .finally(() => {
         pending.delete(kind);
         for (const fn of listeners) fn();

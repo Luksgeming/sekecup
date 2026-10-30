@@ -5,7 +5,7 @@ import type { Store } from '../model/store';
 import type { Vec2 } from '../model/types';
 import { buildMeshes, disposeGroup } from './buildMeshes';
 import { floorPoint } from './floorPoint';
-import { loadModels, onModelLoaded } from '../interior/models';
+import { isModelReady, loadModels, onModelLoaded } from '../interior/models';
 
 const LOW_WALL_HEIGHT = 1.2;
 const DRAG_THRESHOLD_PX = 4;
@@ -32,7 +32,9 @@ export class View3D {
   private lowWalls = true;
   private selectedId?: string;
   private highlight?: THREE.BoxHelper;
-  private press?: { x: number; y: number; shift: boolean; itemId?: string; grab?: Vec2; moved: boolean };
+  private press?: { pointerId: number; x: number; y: number; shift: boolean; itemId?: string; grab?: Vec2; moved: boolean };
+  private bar: HTMLElement;
+  private hint: HTMLElement;
   private raycaster = new THREE.Raycaster();
   private unsubscribe: () => void;
   private resizeObserver: ResizeObserver;
@@ -97,13 +99,13 @@ export class View3D {
     };
 
     // on-canvas controls: wall height toggle and a short how-to
-    const bar = document.createElement('div');
+    const bar = (this.bar = document.createElement('div'));
     bar.className = 'view3d-bar';
     this.wallToggle = document.createElement('button');
     this.wallToggle.type = 'button';
     this.wallToggle.addEventListener('click', () => this.setLowWalls(!this.lowWalls));
     bar.append(this.wallToggle);
-    const hint = document.createElement('p');
+    const hint = (this.hint = document.createElement('p'));
     hint.className = 'view3d-hint';
     hint.textContent = 'Seret: putar · Shift atau klik kanan + seret: geser · Scroll: zoom · Seret furnitur untuk memindah';
     container.append(bar, hint);
@@ -115,10 +117,14 @@ export class View3D {
     this.resize();
   }
 
-  /** The house with full-height walls and every furniture model loaded, for exporting. */
-  async exportModel(): Promise<THREE.Group> {
-    await loadModels(this.store.project.furniture.map((f) => f.kind));
-    return buildMeshes(this.store.project);
+  /**
+   * The house with full-height walls and every furniture model loaded, for exporting.
+   * `missing` counts pieces whose model could not load and went out as plain boxes.
+   */
+  async exportModel(): Promise<{ group: THREE.Group; missing: number }> {
+    const kinds = this.store.project.furniture.map((f) => f.kind);
+    await loadModels(kinds);
+    return { group: buildMeshes(this.store.project), missing: kinds.filter((k) => !isModelReady(k)).length };
   }
 
   setLowWalls(low: boolean): void {
@@ -213,11 +219,22 @@ export class View3D {
     this.container.addEventListener(
       'pointerdown',
       (e) => {
-        if (e.button !== 0 || e.target !== el) return;
+        if (e.target !== el) return;
+        // working in the 3D view counts as moving the camera: stop re-framing it on every edit
+        this.autoFit = false;
+        if (this.press && e.pointerId !== this.press.pointerId) {
+          // a second finger: let OrbitControls pinch or rotate, and put a dragged piece back
+          const wasDragging = this.press.itemId !== undefined;
+          this.press = undefined;
+          this.controls.enabled = true;
+          if (wasDragging) this.rebuild();
+          return;
+        }
+        if (e.button !== 0) return;
         const itemId = e.shiftKey || this.hooks.isPlacing() ? undefined : this.furnitureHit(e);
         const item = itemId ? this.store.project.furniture.find((f) => f.id === itemId) : undefined;
         const at = this.floorAt(e);
-        this.press = { x: e.clientX, y: e.clientY, shift: e.shiftKey, moved: false };
+        this.press = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, shift: e.shiftKey, moved: false };
         if (item && at) {
           this.press.itemId = item.id;
           this.press.grab = { x: at.x - item.x, y: at.y - item.y };
@@ -230,7 +247,7 @@ export class View3D {
 
     el.addEventListener('pointermove', (e) => {
       const p = this.press;
-      if (!p) return;
+      if (!p || e.pointerId !== p.pointerId) return;
       if (!p.moved && Math.hypot(e.clientX - p.x, e.clientY - p.y) > DRAG_THRESHOLD_PX) p.moved = true;
       if (!p.moved || !p.itemId) return;
       const at = this.floorAt(e);
@@ -244,10 +261,11 @@ export class View3D {
 
     const end = (e: PointerEvent, cancelled: boolean) => {
       const p = this.press;
+      if (!p || e.pointerId !== p.pointerId) return;
       this.press = undefined;
       this.controls.enabled = true;
-      if (!p || cancelled) {
-        this.rebuild();
+      if (cancelled) {
+        if (p.itemId) this.rebuild();
         return;
       }
       if (p.itemId && p.moved) {
@@ -261,6 +279,9 @@ export class View3D {
         this.hooks.selectFurniture(p.itemId);
         return;
       }
+      // a click on a wall would otherwise land on the floor behind it
+      const first = this.ray(e).intersectObjects(this.house.children, true)[0];
+      if (first?.object.userData.kind === 'wall') return;
       const at = this.floorAt(e);
       if (at) this.hooks.clickFloor(at, p.shift);
     };
@@ -301,6 +322,9 @@ export class View3D {
     this.resizeObserver.disconnect();
     this.controls.dispose();
     disposeGroup(this.house);
+    this.highlight?.dispose();
+    this.bar.remove();
+    this.hint.remove();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }

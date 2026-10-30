@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { startAutosave, type KeyValue } from '../../src/storage/autosave';
 import { Store } from '../../src/model/store';
-import { addWall, emptyProject } from '../../src/model/project';
+import { addFurniture, addWall, emptyProject } from '../../src/model/project';
 import { serializeProject } from '../../src/io/projectFile';
 
 function memory(initial?: string): KeyValue & { data: Map<string, string> } {
@@ -100,5 +100,18 @@ describe('autosave early edits', () => {
     const a = await pending;
     await a.flush();
     expect(data.get('rea:current')).toContain('"walls"');
+  });
+});
+
+describe('restoring furniture that left the catalog', () => {
+  it('reports dropped pieces and keeps a backup of the old save', async () => {
+    const p = addFurniture(emptyProject(), 'sofa-3', { x: 1, y: 1 });
+    const old = serializeProject({ ...p, furniture: [...p.furniture, { ...p.furniture[0], id: 'old', kind: 'kulkas' as never }] });
+    const kv = memory(old);
+    const store = new Store(emptyProject());
+    const r = await startAutosave(store, kv);
+    expect(r.dropped).toBe(1);
+    expect(kv.data.get('rea:backup')).toBe(old);
+    expect(store.project.furniture).toHaveLength(1);
   });
 });

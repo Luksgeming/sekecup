@@ -31,7 +31,8 @@ export default defineConfig({
         runtimeCaching: [
           {
             urlPattern: /\/models\/.*\.glb$/,
-            handler: 'CacheFirst',
+            // serve the cached copy at once, and refresh it in the background after a release
+            handler: 'StaleWhileRevalidate',
             options: { cacheName: 'rea-models', expiration: { maxEntries: 60 } },
           },
         ],

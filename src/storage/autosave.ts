@@ -1,15 +1,17 @@
 import { get, set } from 'idb-keyval';
 import type { Store } from '../model/store';
-import { parseProject, serializeProject } from '../io/projectFile';
+import { parseProjectWithNotes, serializeProject } from '../io/projectFile';
 
 export type KeyValue = {
   get: (key: string) => Promise<string | undefined>;
   set: (key: string, value: string) => Promise<void>;
 };
 
-export type Autosave = { ok: boolean; flush: () => Promise<void> };
+/** `dropped`: pieces left out of the restored drawing because their kind left the catalog. */
+export type Autosave = { ok: boolean; flush: () => Promise<void>; dropped: number };
 
 const KEY = 'rea:current';
+const BACKUP_KEY = 'rea:backup';
 const DELAY_MS = 500;
 const READ_TIMEOUT_MS = 3000;
 
@@ -36,12 +38,18 @@ export async function startAutosave(
   try {
     saved = await withTimeout(kv.get(KEY), READ_TIMEOUT_MS);
   } catch {
-    return { ok: false, flush: async () => {} };
+    return { ok: false, flush: async () => {}, dropped: 0 };
   }
   // the user may have started drawing while storage was slow; their work wins
+  let dropped = 0;
   if (saved && store.project === before) {
-    const p = parseProject(saved);
-    if (!('error' in p)) store.load(p);
+    const r = parseProjectWithNotes(saved);
+    if (!('error' in r)) {
+      dropped = r.dropped;
+      // keep the untouched old save, since the next autosave overwrites it without those pieces
+      if (dropped) await kv.set(BACKUP_KEY, saved).catch(() => {});
+      store.load(r.project);
+    }
   }
 
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -66,5 +74,5 @@ export async function startAutosave(
     clearTimeout(timer);
     timer = setTimeout(() => void flush(), DELAY_MS);
   });
-  return { ok: true, flush };
+  return { ok: true, flush, dropped };
 }
