@@ -3,6 +3,9 @@ import { emptyProject } from './model/project';
 import { Store } from './model/store';
 import { PlanView } from './plan/PlanView';
 import { View3D } from './view3d/View3D';
+import { startAutosave } from './storage/autosave';
+import { parseProject, PROJECT_EXTENSION, serializeProject } from './io/projectFile';
+import { downloadBlob, pickFile, safeFilename } from './io/download';
 import { createToolbar, TOOL_HINTS, toolForKey } from './ui/toolbar';
 
 const store = new Store(emptyProject());
@@ -22,7 +25,35 @@ function setViewMode(mode: ViewMode): void {
   for (const m of ['2d', 'both', '3d'] as const) toolbar.setPressed(`view-${m}`, m === mode);
 }
 
+async function openProjectFile(): Promise<void> {
+  const file = await pickFile('.json,application/json');
+  if (!file) return;
+  const p = parseProject(await file.text());
+  if ('error' in p) {
+    toast(`Gagal membuka file: ${p.error}`);
+    return;
+  }
+  store.load(p);
+  view3d.fit();
+  toast(`Dibuka: ${p.name}`);
+}
+
+function saveProjectFile(): void {
+  const p = store.project;
+  downloadBlob(new Blob([serializeProject(p)], { type: 'application/json' }), safeFilename(p.name) + PROJECT_EXTENSION);
+}
+
+function newProject(): void {
+  if (store.project.walls.length && !window.confirm('Mulai gambar baru? Gambar sekarang akan diganti.')) return;
+  store.load(emptyProject());
+}
+
 const toolbar = createToolbar(toolbarEl, (t) => plan.setTool(t), [
+  [
+    { id: 'new', label: 'Baru', title: 'Gambar baru', run: newProject },
+    { id: 'open', label: 'Buka', title: 'Buka file .rea.json', run: () => void openProjectFile() },
+    { id: 'save', label: 'Simpan File', title: 'Unduh file .rea.json', run: saveProjectFile },
+  ],
   [
     { id: 'undo', label: 'Undo', title: 'Undo (Ctrl/Cmd+Z)', run: () => store.undo() },
     { id: 'redo', label: 'Redo', title: 'Redo (Ctrl/Cmd+Shift+Z)', run: () => store.redo() },
@@ -37,7 +68,7 @@ const toolbar = createToolbar(toolbarEl, (t) => plan.setTool(t), [
 setViewMode('both');
 
 let toastTimer = 0;
-export function toast(msg: string): void {
+function toast(msg: string): void {
   toastEl.textContent = msg;
   toastEl.hidden = false;
   clearTimeout(toastTimer);
@@ -74,4 +105,12 @@ window.addEventListener('keydown', (e) => {
   }
   const tool = toolForKey(e.key);
   if (tool) plan.setTool(tool);
+});
+
+startAutosave(store).then(({ ok }) => {
+  if (ok) return;
+  const banner = document.createElement('div');
+  banner.id = 'banner';
+  banner.textContent = 'Tidak tersimpan otomatis di browser ini. Gunakan "Simpan File" agar gambar tidak hilang.';
+  document.body.insertBefore(banner, document.querySelector('#views'));
 });

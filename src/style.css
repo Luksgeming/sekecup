@@ -16,8 +16,8 @@
 html, body { height: 100%; margin: 0; }
 
 body {
-  display: grid;
-  grid-template-rows: auto 1fr auto;
+  display: flex;
+  flex-direction: column;
   background: var(--bg);
   overflow: hidden;
 }
@@ -51,7 +51,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 button:disabled { color: #b5ae9e; cursor: default; }
 button[aria-pressed='true'] { background: var(--ink); color: var(--panel); }
 
-#views { display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
+#views { flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
 #views[data-mode='2d'] { grid-template-columns: 1fr; }
 #views[data-mode='2d'] #view3d-pane { display: none; }
 #views[data-mode='3d'] { grid-template-columns: 1fr; }
