@@ -13,6 +13,9 @@ const listeners = new Set<() => void>();
 
 let loader: GLTFLoader | undefined;
 
+// hosts that cannot serve .glb get self-contained glTF JSON files instead
+const MODEL_EXT = import.meta.env.VITE_MODEL_EXT ?? 'glb';
+
 const PLACEHOLDER = new THREE.MeshStandardMaterial({ color: 0xb9b2a3, transparent: true, opacity: 0.35, roughness: 1 });
 
 function prepare(kind: FurnitureKind, scene: THREE.Object3D): THREE.Object3D {
@@ -68,7 +71,7 @@ export function loadModel(kind: FurnitureKind): Promise<void> {
   if (!p) {
     loader ??= new GLTFLoader();
     p = loader
-      .loadAsync(`${import.meta.env.BASE_URL}models/${FURNITURE[kind].model}.glb`)
+      .loadAsync(`${import.meta.env.BASE_URL}models/${FURNITURE[kind].model}.${MODEL_EXT}`)
       .then((gltf) => void ready.set(kind, prepare(kind, gltf.scene)))
       .catch(() => {
         failed.add(kind);
