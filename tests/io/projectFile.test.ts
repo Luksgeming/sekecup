@@ -115,3 +115,17 @@ describe('version 2', () => {
     expect(parseProject(JSON.stringify(broken))).toHaveProperty('error');
   });
 });
+
+describe('version 2 hardening', () => {
+  it('rejects "constructor" as a furniture kind', () => {
+    const p = addFurniture(sample(), 'sofa-3', { x: 1, y: 1 });
+    const broken = { ...p, furniture: [{ ...p.furniture[0], kind: 'constructor' }] };
+    expect(parseProject(JSON.stringify(broken))).toHaveProperty('error');
+  });
+
+  it('normalizes rotation from a file', () => {
+    const p = addFurniture(sample(), 'sofa-3', { x: 1, y: 1 });
+    const odd = { ...p, furniture: [{ ...p.furniture[0], rotation: -90 }] };
+    expect((parseProject(JSON.stringify(odd)) as Project).furniture[0].rotation).toBe(270);
+  });
+});

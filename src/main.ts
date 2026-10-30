@@ -50,7 +50,14 @@ async function openProjectFile(): Promise<void> {
   toast(`Dibuka: ${p.name}`);
 }
 
+// the shareable preview build runs in a sandbox that blocks downloads and service workers
+const PREVIEW = import.meta.env.VITE_PREVIEW === '1';
+
 async function save(blob: Blob, filename: string): Promise<void> {
+  if (PREVIEW) {
+    toast('Menyimpan dan export file belum bisa di versi link ini. Gambar tetap tersimpan otomatis di browser.');
+    return;
+  }
   try {
     if (await saveFile(blob, filename)) toast(`Tersimpan: ${filename}`);
   } catch {
@@ -193,4 +200,4 @@ startAutosave(store, undefined, { onWriteError: showStorageBanner }).then(({ ok,
   });
 });
 
-if (!('__TAURI_INTERNALS__' in window)) registerSW({ immediate: true });
+if (!PREVIEW && !('__TAURI_INTERNALS__' in window)) registerSW({ immediate: true });

@@ -38,7 +38,7 @@ export type FurnitureKind = keyof typeof FURNITURE;
 
 export const FURNITURE_KINDS = Object.keys(FURNITURE) as FurnitureKind[];
 
-export const isFurnitureKind = (v: unknown): v is FurnitureKind => typeof v === 'string' && v in FURNITURE;
+export const isFurnitureKind = (v: unknown): v is FurnitureKind => typeof v === 'string' && Object.hasOwn(FURNITURE, v);
 
 export const FLOOR_MATERIALS = {
   keramik: { label: 'Keramik', color: '#e7e3dc' },
@@ -50,7 +50,7 @@ export const FLOOR_MATERIALS = {
 
 export type FloorMaterial = keyof typeof FLOOR_MATERIALS;
 
-export const isFloorMaterial = (v: unknown): v is FloorMaterial => typeof v === 'string' && v in FLOOR_MATERIALS;
+export const isFloorMaterial = (v: unknown): v is FloorMaterial => typeof v === 'string' && Object.hasOwn(FLOOR_MATERIALS, v);
 
 export const WALL_PALETTE = [
   { label: 'Putih tulang', color: '#f2efe8' },

@@ -1,6 +1,6 @@
 import { FURNITURE } from '../interior/kinds';
 import type { Furniture, Project, Vec2 } from '../model/types';
-import { pointInPolygon } from './polygon';
+import { pointInPolygon, polygonArea } from './polygon';
 
 /** The four plan corners of a piece of furniture after rotation. */
 export function footprint(f: Furniture): Vec2[] {
@@ -16,10 +16,25 @@ export function footprint(f: Furniture): Vec2[] {
   ].map(([x, y]) => ({ x: f.x + x * cos - y * sin, y: f.y + x * sin + y * cos }));
 }
 
-/** The topmost (last placed) furniture under a plan point. */
+/**
+ * The furniture under a plan point. When pieces overlap the smallest one wins, so a
+ * sofa standing on a rug stays clickable; among equal sizes the last placed wins.
+ */
 export function furnitureAt(p: Project, at: Vec2): Furniture | undefined {
-  for (let i = p.furniture.length - 1; i >= 0; i--) {
-    if (pointInPolygon(at, footprint(p.furniture[i]))) return p.furniture[i];
+  let best: Furniture | undefined;
+  let bestArea = Infinity;
+  for (const f of p.furniture) {
+    const corners = footprint(f);
+    const area = polygonArea(corners);
+    if (area <= bestArea && pointInPolygon(at, corners)) {
+      best = f;
+      bestArea = area;
+    }
   }
-  return undefined;
+  return best;
+}
+
+/** Drawing order for the plan: rugs lie under everything else. */
+export function drawOrder(items: Furniture[]): Furniture[] {
+  return [...items.filter((f) => f.kind === 'karpet'), ...items.filter((f) => f.kind !== 'karpet')];
 }

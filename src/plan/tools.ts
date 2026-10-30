@@ -96,8 +96,10 @@ export function handleClick(
       if (!state.placing) return { state, project };
       const at = { x: roundTo(world.x, FURNITURE_GRID), y: roundTo(world.y, FURNITURE_GRID) };
       const next = addFurniture(project, state.placing, at);
+      // Shift keeps the tool armed, for rows of chairs and the like
+      if (mods.shift) return { state, project: next };
       const id = next.furniture.at(-1)!.id;
-      return { state: { ...state, tool: 'select', draft: [], selected: { kind: 'furniture', id } }, project: next };
+      return { state: { ...state, tool: 'select', draft: [], placing: undefined, selected: { kind: 'furniture', id } }, project: next };
     }
 
     case 'select':
@@ -125,6 +127,9 @@ export function handleLengthInput(
 }
 
 export function handleKey(state: ToolState, project: Project, key: string, ctx: ToolContext = {}): ToolResult {
+  if (key === 'Escape' && state.placing) {
+    return { state: { ...state, tool: 'select', placing: undefined, draft: [] }, project, handled: true };
+  }
   if (key === 'Escape') {
     const busy = state.draft.length > 0 || state.selected !== undefined;
     return { state: { ...state, draft: [], selected: undefined }, project, handled: busy };

@@ -17,7 +17,7 @@ export const TOOL_HINTS: Record<ToolName, string> = {
   door: 'Klik di dinding untuk memasang pintu.',
   window: 'Klik di dinding untuk memasang jendela.',
   room: 'Klik sudut-sudut ruangan, atau ketik panjang sisi. Klik titik awal atau Enter untuk selesai.',
-  furniture: 'Klik di denah untuk menaruh furnitur yang dipilih.',
+  furniture: 'Klik di denah untuk menaruh furnitur. Tahan Shift untuk menaruh beberapa sekaligus. Esc = batal.',
 };
 
 export function toolForKey(key: string): ToolName | undefined {

@@ -54,9 +54,19 @@ export function createCatalogPanel(
     panel.append(h, list);
   }
 
+  panel.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    panel.hidden = true;
+  });
+
   container.append(panel);
   return {
-    toggle: () => (panel.hidden = !panel.hidden),
+    toggle: () => {
+      panel.hidden = !panel.hidden;
+      // move keyboard focus into the list so it can be browsed right away
+      if (!panel.hidden) panel.querySelector<HTMLButtonElement>('.catalog-item')?.focus();
+    },
     hide: () => (panel.hidden = true),
     isOpen: () => !panel.hidden,
   };

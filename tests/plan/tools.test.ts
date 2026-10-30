@@ -215,3 +215,21 @@ describe('furniture tool', () => {
     expect(reconcile(s, emptyProject()).selected).toBeUndefined();
   });
 });
+
+describe('furniture tool polish', () => {
+  const placing: ToolState = { ...initialToolState(), tool: 'furniture', placing: 'kursi-makan' };
+
+  it('Esc cancels placing and returns to select', () => {
+    const r = handleKey(placing, emptyProject(), 'Escape');
+    expect(r.handled).toBe(true);
+    expect(r.state.placing).toBeUndefined();
+    expect(r.state.tool).toBe('select');
+  });
+
+  it('Shift-click keeps placing the same item', () => {
+    const r = handleClick(placing, emptyProject(), { x: 1, y: 1 }, { shift: true });
+    expect(r.project.furniture).toHaveLength(1);
+    expect(r.state.tool).toBe('furniture');
+    expect(r.state.placing).toBe('kursi-makan');
+  });
+});

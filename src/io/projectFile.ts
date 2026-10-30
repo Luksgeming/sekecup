@@ -65,7 +65,7 @@ function furniture(v: unknown): Furniture {
     kind: o.kind as Furniture['kind'],
     x: num(o.x, 'Posisi furnitur'),
     y: num(o.y, 'Posisi furnitur'),
-    rotation: num(o.rotation, 'Rotasi furnitur'),
+    rotation: ((Math.round(num(o.rotation, 'Rotasi furnitur')) % 360) + 360) % 360,
     color: color(o.color, 'Warna furnitur'),
   };
 }

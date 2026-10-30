@@ -60,3 +60,19 @@ describe('interior in 3D', () => {
     expect((wall.material as THREE.MeshStandardMaterial).color.getHexString()).toBe('9caf88');
   });
 });
+
+describe('rotation direction', () => {
+  it('turns the chair back to the same side as the 2D back edge', async () => {
+    const { footprint } = await import('../../src/geometry/footprint');
+    let p = addFurniture(emptyProject(), 'kursi-makan', { x: 0, y: 0 });
+    p = updateFurniture(p, p.furniture[0].id, { rotation: 90 }) as Project;
+    const [c0, c1] = footprint(p.furniture[0]);
+    const backX2d = (c0.x + c1.x) / 2;
+    const chair = ofKind(buildMeshes(p), 'furniture')[0];
+    chair.updateMatrixWorld(true);
+    // the backrest is the only part above seat height
+    const back = chair.children.find((m) => new THREE.Box3().setFromObject(m).max.y > 0.6)!;
+    const backX3d = new THREE.Box3().setFromObject(back).getCenter(new THREE.Vector3()).x;
+    expect(Math.sign(backX3d)).toBe(Math.sign(backX2d));
+  });
+});

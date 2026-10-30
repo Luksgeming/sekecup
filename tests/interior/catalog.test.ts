@@ -19,3 +19,13 @@ describe('furniture catalog', () => {
     expect((box.min.z + box.max.z) / 2).toBeCloseTo(0, 2);
   });
 });
+
+describe('kind checks', () => {
+  it('does not accept built-in object names as furniture or floors', async () => {
+    const { isFurnitureKind, isFloorMaterial } = await import('../../src/interior/kinds');
+    for (const name of ['constructor', 'toString', '__proto__']) {
+      expect(isFurnitureKind(name)).toBe(false);
+      expect(isFloorMaterial(name)).toBe(false);
+    }
+  });
+});

@@ -4,7 +4,7 @@ import { polygonArea } from '../geometry/polygon';
 import { snapPoint } from '../geometry/snap';
 import { add, dist, normalize, scale, sub } from '../geometry/vec';
 import { addRoom, cornerAt, moveCorner, moveFurniture } from '../model/project';
-import { footprint, furnitureAt } from '../geometry/footprint';
+import { drawOrder, footprint, furnitureAt } from '../geometry/footprint';
 import { FLOOR_MATERIALS, FURNITURE, type FurnitureKind } from '../interior/kinds';
 import { askText } from '../ui/dialog';
 import { parseLength } from '../geometry/length';
@@ -327,12 +327,15 @@ export class PlanView {
     ctx.fillRect(0, 0, w, h);
     this.drawGrid();
     for (const r of p.rooms) this.drawRoom(r, this.isSelected('room', r.id));
-    for (const f of p.furniture) this.drawFurniture(f, this.isSelected('furniture', f.id));
+    for (const f of drawOrder(p.furniture)) this.drawFurniture(f, false);
     for (const wall of p.walls) this.drawWall(wall, this.isSelected('wall', wall.id));
     for (const o of p.openings) {
       const wall = p.walls.find((x) => x.id === o.wallId);
       if (wall) this.drawOpening(wall, o, this.isSelected('opening', o.id));
     }
+    // the selected piece is drawn again on top, so walls never hide its outline
+    const picked = p.furniture.find((f) => this.isSelected('furniture', f.id));
+    if (picked) this.drawFurniture(picked, true);
     for (const r of p.rooms) this.drawRoomLabel(r.name, r.points);
     for (const wall of p.walls) this.drawLength(wall.a, wall.b);
     this.drawDraft(p);
@@ -393,15 +396,15 @@ export class PlanView {
     }
   }
 
-  private drawFurniture(f: Furniture, selected: boolean): void {
+  private drawFurniture(f: Furniture, selected: boolean, ghost = false): void {
     const { ctx } = this;
     const corners = footprint(f);
     this.polygonPath(corners);
     ctx.fillStyle = f.color;
-    ctx.globalAlpha = f.kind === 'karpet' ? 0.5 : 0.85;
+    ctx.globalAlpha = ghost ? 0.4 : f.kind === 'karpet' ? 0.5 : 0.85;
     ctx.fill();
     ctx.globalAlpha = 1;
-    ctx.strokeStyle = selected ? COLORS.selected : 'rgba(43, 42, 39, 0.75)';
+    ctx.strokeStyle = ghost ? COLORS.draft : selected ? COLORS.selected : 'rgba(43, 42, 39, 0.75)';
     ctx.lineWidth = selected ? 2.5 : 1;
     ctx.stroke();
 
@@ -522,10 +525,8 @@ export class PlanView {
     if (this.state.tool === 'select') this.drawCorners(p);
     if (this.state.tool === 'furniture' && this.state.placing && this.hover) {
       // ghost of the piece under the cursor before it is placed
-      ctx.globalAlpha = 0.5;
       const kind = this.state.placing;
-      this.drawFurniture({ id: '', kind, x: this.hover.x, y: this.hover.y, rotation: 0, color: FURNITURE[kind].color }, true);
-      ctx.globalAlpha = 1;
+      this.drawFurniture({ id: '', kind, x: this.hover.x, y: this.hover.y, rotation: 0, color: FURNITURE[kind].color }, false, true);
     }
     const hover = this.snappedHover();
     const { tool, draft } = this.state;
@@ -569,7 +570,12 @@ export class PlanView {
 }
 
 export function isTextField(t: EventTarget | null): boolean {
-  return t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || (t instanceof HTMLElement && t.closest('dialog') !== null);
+  return (
+    t instanceof HTMLInputElement ||
+    t instanceof HTMLTextAreaElement ||
+    t instanceof HTMLSelectElement ||
+    (t instanceof HTMLElement && t.closest('dialog') !== null)
+  );
 }
 
 export function formatLength(m: number): string {

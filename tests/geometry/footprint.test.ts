@@ -45,3 +45,11 @@ describe('furnitureAt', () => {
     expect(furnitureAt(p, { x: 0, y: 0 })?.kind).toBe('meja-tamu');
   });
 });
+
+describe('furnitureAt with a rug', () => {
+  it('picks the sofa standing on a rug placed after it', () => {
+    let p = addFurniture(emptyProject(), 'sofa-3', { x: 0, y: 0 });
+    p = addFurniture(p, 'karpet', { x: 0, y: 0.3 });
+    expect(furnitureAt(p, { x: 0.2, y: 0 })?.kind).toBe('sofa-3');
+  });
+});
