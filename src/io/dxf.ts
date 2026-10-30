@@ -1,6 +1,8 @@
 import type { Project, Vec2 } from '../model/types';
 import { add, normalize, scale, sub } from '../geometry/vec';
 import { polygonArea } from '../geometry/polygon';
+import { footprint } from '../geometry/footprint';
+import { FURNITURE } from '../interior/kinds';
 
 // Minimal DXF R12 (AC1009): opens in AutoCAD, LibreCAD, DraftSight and most viewers.
 // Plan y grows downward on screen; CAD y grows upward, so y is negated.
@@ -9,6 +11,7 @@ const LAYERS: [name: string, color: number][] = [
   ['WALLS', 7],
   ['OPENINGS', 4],
   ['ROOMS', 2],
+  ['FURNITURE', 3],
 ];
 
 const fmt = (n: number) => (Math.abs(n) < 1e-9 ? 0 : n).toFixed(4);
@@ -77,30 +80,43 @@ export function projectToDxf(p: Project): string {
     else line('OPENINGS', start, add(start, scale({ x: -dir.y, y: dir.x }, o.width)));
   }
 
-  for (const r of p.rooms) {
+  const closedPolyline = (layer: string, points: Vec2[]) => {
     pair(0, 'POLYLINE');
-    pair(8, 'ROOMS');
+    pair(8, layer);
     pair(66, 1);
     pair(70, 1); // closed
-    for (const pt of r.points) {
+    for (const pt of points) {
       const c = cad(pt);
       pair(0, 'VERTEX');
-      pair(8, 'ROOMS');
+      pair(8, layer);
       pair(10, fmt(c.x));
       pair(20, fmt(c.y));
       pair(30, fmt(0));
     }
     pair(0, 'SEQEND');
-    pair(8, 'ROOMS');
+    pair(8, layer);
+  };
 
-    const center = cad(scale(r.points.reduce(add, { x: 0, y: 0 }), 1 / r.points.length));
+  const text = (layer: string, at: Vec2, height: number, value: string) => {
+    const c = cad(at);
     pair(0, 'TEXT');
-    pair(8, 'ROOMS');
-    pair(10, fmt(center.x));
-    pair(20, fmt(center.y));
+    pair(8, layer);
+    pair(10, fmt(c.x));
+    pair(20, fmt(c.y));
     pair(30, fmt(0));
-    pair(40, '0.25');
-    pair(1, `${r.name} (${polygonArea(r.points).toFixed(2)} m2)`);
+    pair(40, height);
+    pair(1, value);
+  };
+
+  for (const r of p.rooms) {
+    closedPolyline('ROOMS', r.points);
+    const center = scale(r.points.reduce(add, { x: 0, y: 0 }), 1 / r.points.length);
+    text('ROOMS', center, 0.25, `${r.name} (${polygonArea(r.points).toFixed(2)} m2)`);
+  }
+
+  for (const f of p.furniture) {
+    closedPolyline('FURNITURE', footprint(f));
+    text('FURNITURE', f, 0.1, FURNITURE[f.kind].label);
   }
 
   pair(0, 'ENDSEC');

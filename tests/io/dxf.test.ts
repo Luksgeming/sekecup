@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { projectToDxf } from '../../src/io/dxf';
-import { addOpening, addRoom, addWall, emptyProject } from '../../src/model/project';
+import { addFurniture, addOpening, addRoom, addWall, emptyProject } from '../../src/model/project';
 import { DOOR_DEFAULTS, type Project } from '../../src/model/types';
 
 // DXF is pairs of lines: group code, value
@@ -58,5 +58,15 @@ describe('projectToDxf', () => {
     const p = addWall(emptyProject(), { x: 0, y: 0 }, { x: 0, y: 3 });
     const ys = entities(projectToDxf(p)).filter((e) => e.type === 'LINE').flatMap((e) => [...e.values.get('20')!, ...e.values.get('21')!].map(Number));
     expect(Math.min(...ys)).toBeCloseTo(-3);
+  });
+});
+
+describe('furniture in DXF', () => {
+  it('draws furniture as a closed outline with its label on layer FURNITURE', () => {
+    const p = addFurniture(emptyProject(), 'kasur-double', { x: 2, y: 2 });
+    const items = entities(projectToDxf(p)).filter((e) => e.layer === 'FURNITURE');
+    expect(items.filter((e) => e.type === 'POLYLINE')).toHaveLength(1);
+    expect(items.filter((e) => e.type === 'VERTEX')).toHaveLength(4);
+    expect(items.find((e) => e.type === 'TEXT')!.values.get('1')![0]).toBe('Kasur double');
   });
 });
